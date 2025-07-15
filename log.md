@@ -26,7 +26,7 @@
 - **サーバーからの接続:** Expressサーバーからデータベースへの接続を確立済み (`Database connected successfully.`のログを確認)。
 - **テストデータ投入 (Seeding):**
   - パスワードハッシュ化のため`bcrypt`をインストール済み。
-  - `admin`と`staff`の2ユーザーを`users`テーブルに登録するシードファイルを作成し、実行済み。
+  - `admin`と`staff`の2ユー���ーを`users`テーブルに登録するシードファイルを作成し、実行済み。
 
 ## 5. better-sqlite3 への移行とテスト環境の整備
 - **better-sqlite3 への移行:**
@@ -39,7 +39,7 @@
   - `npm run test:docker` 実行時に `TypeError: input.replace is not a function` エラーが発生。
   - `package.json` の `test` スクリプトを `vitest --workspace` に変更することで解消を試みるも、`Error: Failed to load url /app/true` エラーが発生。
   - `vitest` の `workspace` 設定が Docker 環境で期待通りに動作しないと判断し、`vitest.config.js` から `workspace` 設定を削除。
-  - `package.json` に `test:client` と `test:server` スクリプトを個別に定義し、それぞれ `vitest run -c vitest.config.js` と `vitest run -c vitest.config.server.js` を実行するように修正。
+  - `package.json` に `test:client` と `test:server` ス���リプトを個別に定義し、それぞれ `vitest run -c vitest.config.js` と `vitest run -c vitest.config.server.js` を実行するように修正。
   - `vitest.config.js` をクライアントテスト用に、`vitest.config.server.js` をサーバーテスト用に設定。
 - **テストの成功:**
   - クライアント側のテスト (`client/tests/example.test.js`) は正常にパス。
@@ -70,8 +70,29 @@
 - **すべてのテストの成功:**
   - 上記の修正により、Docker 環境でのすべてのクライアントおよびサーバーテストが正常にパスすることを確認。
 
-## 現在の状態
+## 現在の���態
 - `better-sqlite3` への移行が完了し、Docker 環境でのビルドも成功。
 - バックエンドの主要な API（予約 CRUD、手書き PNG アップロード、ユーザー管理）が実装され、テストも正常に動作することを確認。
 - クライアントおよびサーバーの Vitest テストが Docker 環境で正常に実行されることを確認。
 - **フロントエンドの実装（Vue.js と Canvas を用いた予約表 UI 開発）に着手できる状態。**
+
+## 7. リアルタイム同期機能の実装 (2025-07-15)
+- **Socket.IO 導入:**
+  - サーバーサイド (`server/src/index.js`) に Socket.IO をセットアップし、Express サーバーと統合。
+  - `connection` イベントで、クライアントに既存の予約データをすべて送信 (`initial-reservations`)。
+  - `create-reservation` イベントをリッスンし、新しい予約をデータベースに保存後、全クライアントにブロードキャスト (`new-reservation`)。
+- **クライアントサイド実装:**
+  - Vue 3 の Composition API を使用して、`useSocket.js` と `useGridDrawer.js` を作成。
+  - `useSocket.js`: Socket.IO サーバーへの接続、イベントの送受信を管理する composable。
+  - `useGridDrawer.js`: Canvas の描画ロジックをカプセル化し、予約データをグリッドに描画する責務を持つ composable。
+  - `ReservationGrid.vue`:
+    - `useSocket` と `useGridDrawer` を利用して、リアルタイムなデータ更新と Canvas 描画を連携。
+    - Canvas クリック時に、患者名を入力するプロンプトを表示し、入力された名前で `create-reservation` イベントをサーバーに送信。
+    - `new-reservation` イベント受信時に、ローカルの予約データを更新し、Canvas を再描画。
+- **テストとリファクタリング:**
+  - Vitest の設定 (`vitest.config.js`) に `@vitejs/plugin-vue` を追加し、Vue コンポーネントのテストを可能に。
+  - 不要なテストファイル (`client/tests/example.test.js`) を削除。
+  - サーバーサイドの `uuid` モジュールのインポートパスを修正。
+- **現在の状態:**
+  - 複数のクライアント（ブラウザータブ）間で、予約がリアルタイムに同��されることを確認。
+  - フロントエンドとバックエンドが WebSocket を介して連携する、基本的な機能が完成。
