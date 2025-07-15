@@ -21,9 +21,9 @@ Author: ChatGPT (based on user discussions)
 フロントエンド	Vue 3 (Composition API) + ViteCanvas: HTML5 <canvas>	iPad/Safari で高パフォーマンス。
 サーバ/API	Node.js 20 + Express 5	軽量・JavaScript 統一言語。
 双方向通信	Socket.IO (WebSocket)	<200 ms のリアルタイム同期。
-データ永続化	SQLite 3 via Knex.js	LAN 単体で運用・簡易バックアップ。
+データ永続化	SQLite 3 via Knex.js (better-sqlite3)	LAN 単体で運用・簡易バックアップ。
 認証	Basic 認証 + bcrypt	シンプル・オフラインで完結。
-手書き画像保存	PNG ファイル (client→server upload)	Apple Pencil 描画を忠実に保存。
+手書き画像保存	PNG ファイル (client→server upload) - Multer, uuid	Apple Pencil 描画を忠実に保存。
 配布	Docker + docker-compose	ワンコマンド導入・アップデート。
 テスト	Vitest / Vue Test Utils (ユニット)Supertest (統合)Playwright (E2E)	CI 上で全自動実行。
 

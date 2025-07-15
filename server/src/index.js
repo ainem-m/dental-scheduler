@@ -4,6 +4,10 @@ const { Server } = require("socket.io");
 const db = require('./db');
 const auth = require('basic-auth');
 const bcrypt = require('bcrypt');
+const multer = require('multer');
+const { v4: uuidv4 } = require('/app/node_modules/uuid');
+const fs = require('fs');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
@@ -63,6 +67,30 @@ app.get('/', (req, res) => {
 // Apply authentication to all /api routes
 app.use('/api', authenticate);
 
+// Multer storage configuration for handwriting PNGs
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadPath = path.join(__dirname, '..', '..', 'data', 'png');
+    fs.mkdirSync(uploadPath, { recursive: true }); // Ensure directory exists
+    cb(null, uploadPath);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = uuidv4();
+    cb(null, uniqueSuffix + '.png');
+  },
+});
+
+const upload = multer({ storage: storage });
+
+// POST /api/handwriting - Upload a handwriting PNG
+app.post('/api/handwriting', authenticate, upload.single('handwriting'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded.' });
+  }
+  // Return the filename (UUID.png) so it can be stored in the reservation
+  res.status(201).json({ filename: req.file.filename });
+});
+
 // POST /api/reservations - Create a new reservation
 app.post('/api/reservations', async (req, res) => {
   const { date, time_min, column_index, patient_name, handwriting } = req.body;
@@ -81,6 +109,7 @@ app.post('/api/reservations', async (req, res) => {
       handwriting,
     });
     const newReservation = await db('reservations').where({ id }).first();
+    console.log('newReservation.patient_name:', newReservation.patient_name); // <-- Add this line
     io.emit('newReservation', newReservation); // Notify clients
     res.status(201).json(newReservation);
   } catch (err) {
@@ -141,10 +170,26 @@ app.delete('/api/reservations/:id', async (req, res) => {
   const { id } = req.params;
 
   try {
+    // まず予約情報を取得
+    const reservationToDelete = await db('reservations').where({ id }).first();
+
+    if (!reservationToDelete) {
+      return res.status(404).json({ error: 'Reservation not found.' });
+    }
+
     const deletedRows = await db('reservations').where({ id }).del();
 
-    if (deletedRows === 0) {
-      return res.status(404).json({ error: 'Reservation not found.' });
+    // Delete associated handwriting PNG if it exists
+    if (reservationToDelete.handwriting) {
+      const filePath = path.join(__dirname, '..', '..', 'data', 'png', reservationToDelete.handwriting);
+      try {
+        await fs.promises.unlink(filePath); // await を追加
+      } catch (err) {
+        // ファイルが存在しない場合など、エラーを無視する
+        if (err.code !== 'ENOENT') {
+          console.error('Error deleting handwriting PNG:', err);
+        }
+      }
     }
 
     io.emit('deleteReservation', id); // Notify clients
@@ -189,7 +234,7 @@ app.post('/api/users', authorize('admin'), async (req, res) => {
 // GET /api/users - Get all users
 app.get('/api/users', authorize('admin'), async (req, res) => {
   try {
-    const users = await db('users').select('id', 'username', 'role', 'created_at', 'updated_at');
+    const users = await db('users').select('id', 'username', 'role');
     res.json(users);
   } catch (err) {
     console.error('Error fetching users:', err);

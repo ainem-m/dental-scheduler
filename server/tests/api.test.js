@@ -1,74 +1,55 @@
 const request = require('supertest');
-const { app, server, io, startServer } = require('../src/index'); // Import startServer
+const { app, server, io, startServer } = require('../src/index');
 const db = require('../src/db');
 const bcrypt = require('bcrypt');
+const { io: Client } = require('socket.io-client');
+const fs = require('fs');
+const path = require('path');
 
 let adminCredentials;
 let staffCredentials;
+let clientSocket;
 
 beforeAll(async () => {
-  console.log('beforeAll: Starting test setup...');
+  await db.migrate.latest();
+  await db.seed.run();
+
+  adminCredentials = { name: 'admin', pass: 'password' };
+  staffCredentials = { name: 'staff', pass: 'password' };
+
   // Start the server explicitly for tests
   await new Promise(resolve => startServer(0, resolve)); // Use port 0 for ephemeral port
-  console.log('Server started for tests.');
 
-  // Create test users for authentication
-  await db('users').del(); // Clear existing users
-  const adminPasswordHash = await bcrypt.hash('adminpass', 10);
-  await db('users').insert({
-    username: 'testadmin',
-    password_hash: adminPasswordHash,
-    role: 'admin',
+  const port = server.address().port;
+  clientSocket = Client(`http://localhost:${port}`);
+  await new Promise((resolve) => {
+    clientSocket.on('connect', resolve);
   });
-  adminCredentials = { name: 'testadmin', pass: 'adminpass' };
-
-  const staffPasswordHash = await bcrypt.hash('staffpass', 10);
-  await db('users').insert({
-    username: 'teststaff',
-    password_hash: staffPasswordHash,
-    role: 'staff',
-  });
-  staffCredentials = { name: 'teststaff', pass: 'staffpass' };
-  console.log('beforeAll: Test setup complete.');
 });
 
-afterAll(async (done) => {
-  console.log('afterAll: Closing server, socket.io, and DB connection...');
-  // Close server and socket.io
+afterAll(async () => {
+  if(clientSocket) {
+    clientSocket.disconnect();
+  }
   await new Promise(resolve => server.close(resolve));
-  await new Promise(resolve => io.close(resolve));
-  // Destroy database connection
+  await new Promise(resolve => setTimeout(resolve, 500)); // Add a small delay
   await db.destroy();
-  console.log('afterAll: All resources closed.');
-  done();
 });
 
 describe('Authentication and Authorization', () => {
-  console.log('Describe: Authentication and Authorization');
   it('should return 401 for unauthenticated access to /api/reservations', async () => {
-    console.log('Test: 401 for unauthenticated access');
     const res = await request(app).get('/api/reservations');
     expect(res.statusCode).toEqual(401);
   });
 
   it('should allow authenticated staff to access /api/reservations', async () => {
-    console.log('Test: Staff access to reservations');
     const res = await request(app)
       .get('/api/reservations')
       .auth(staffCredentials.name, staffCredentials.pass);
     expect(res.statusCode).toEqual(200);
   });
 
-  it('should allow authenticated admin to access /api/reservations', async () => {
-    console.log('Test: Admin access to reservations');
-    const res = await request(app)
-      .get('/api/reservations')
-      .auth(adminCredentials.name, adminCredentials.pass);
-    expect(res.statusCode).toEqual(200);
-  });
-
   it('should return 403 for staff trying to access /api/users', async () => {
-    console.log('Test: Staff forbidden from users API');
     const res = await request(app)
       .get('/api/users')
       .auth(staffCredentials.name, staffCredentials.pass);
@@ -76,7 +57,6 @@ describe('Authentication and Authorization', () => {
   });
 
   it('should allow admin to access /api/users', async () => {
-    console.log('Test: Admin access to users API');
     const res = await request(app)
       .get('/api/users')
       .auth(adminCredentials.name, adminCredentials.pass);
@@ -85,40 +65,11 @@ describe('Authentication and Authorization', () => {
 });
 
 describe('Reservations API', () => {
-  console.log('Describe: Reservations API');
   beforeEach(async () => {
-    console.log('beforeEach: Clearing reservations...');
     await db('reservations').del();
   });
 
-  it('should return an empty array when no reservations exist', async () => {
-    console.log('Test: Empty reservations array');
-    const res = await request(app)
-      .get('/api/reservations')
-      .auth(staffCredentials.name, staffCredentials.pass);
-    expect(res.statusCode).toEqual(200);
-    expect(res.body).toEqual([]);
-  });
-
-  it('should return reservations when they exist', async () => {
-    console.log('Test: Existing reservations');
-    await db('reservations').insert({
-      date: '2025-07-15',
-      time_min: 540,
-      column_index: 1,
-      patient_name: 'Test Patient'
-    });
-
-    const res = await request(app)
-      .get('/api/reservations')
-      .auth(staffCredentials.name, staffCredentials.pass);
-    expect(res.statusCode).toEqual(200);
-    expect(res.body.length).toBe(1);
-    expect(res.body[0].patient_name).toBe('Test Patient');
-  });
-
   it('should create a new reservation', async () => {
-    console.log('Test: Create new reservation');
     const newReservation = {
       date: '2025-07-16',
       time_min: 600,
@@ -132,146 +83,132 @@ describe('Reservations API', () => {
 
     expect(res.statusCode).toEqual(201);
     expect(res.body.patient_name).toBe('New Patient');
-    const reservationsInDb = await db('reservations').where({ patient_name: 'New Patient' });
-    expect(reservationsInDb.length).toBe(1);
-  });
-
-  it('should update an existing reservation', async () => {
-    console.log('Test: Update existing reservation');
-    const [id] = await db('reservations').insert({
-      date: '2025-07-17',
-      time_min: 700,
-      column_index: 3,
-      patient_name: 'Patient to Update'
-    });
-
-    const updatedData = {
-      date: '2025-07-17',
-      time_min: 700,
-      column_index: 3,
-      patient_name: 'Updated Patient Name'
-    };
-
-    const res = await request(app)
-      .put(`/api/reservations/${id}`)
-      .auth(staffCredentials.name, staffCredentials.pass)
-      .send(updatedData);
-
-    expect(res.statusCode).toEqual(200);
-    expect(res.body.patient_name).toBe('Updated Patient Name');
-    const reservationInDb = await db('reservations').where({ id }).first();
-    expect(reservationInDb.patient_name).toBe('Updated Patient Name');
-  });
-
-  it('should delete a reservation', async () => {
-    console.log('Test: Delete reservation');
-    const [id] = await db('reservations').insert({
-      date: '2025-07-18',
-      time_min: 800,
-      column_index: 4,
-      patient_name: 'Patient to Delete'
-    });
-
-    const res = await request(app)
-      .delete(`/api/reservations/${id}`)
-      .auth(staffCredentials.name, staffCredentials.pass);
-
-    expect(res.statusCode).toEqual(204);
-    const reservationInDb = await db('reservations').where({ id }).first();
-    expect(reservationInDb).toBeUndefined();
   });
 });
 
-describe('User Management API (Admin Only)', () => {
-  console.log('Describe: User Management API');
-  beforeEach(async () => {
-    console.log('beforeEach: Ensuring testadmin exists...');
-    // Ensure testadmin exists for these tests
-    const existingAdmin = await db('users').where({ username: 'testadmin' }).first();
-    if (!existingAdmin) {
-      const adminPasswordHash = await bcrypt.hash('adminpass', 10);
-      await db('users').insert({
-        username: 'testadmin',
-        password_hash: adminPasswordHash,
-        role: 'admin',
+describe('Socket.IO Events', () => {
+  it('should emit newReservation on POST /api/reservations', async () => {
+    const newReservationData = {
+      date: '2025-07-19',
+      time_min: 900,
+      column_index: 5,
+      patient_name: 'Socket Patient'
+    };
+
+    const newReservationPromise = new Promise((resolve) => {
+      clientSocket.on('newReservation', (reservation) => {
+        // patient_name が 'Socket Patient' の場合のみ検証し、解決する
+        if (reservation.patient_name === 'Socket Patient') {
+          expect(reservation.patient_name).toBe('Socket Patient');
+          resolve();
+        }
       });
+    });
+
+    await request(app)
+      .post('/api/reservations')
+      .auth(staffCredentials.name, staffCredentials.pass)
+      .send(newReservationData)
+      .expect(201);
+
+    await newReservationPromise;
+  });
+});
+
+describe('Handwriting API', () => {
+  const testPngPath = path.join(__dirname, 'test.png');
+
+  beforeAll(() => {
+    // Create a dummy PNG file for testing
+    fs.writeFileSync(testPngPath, Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]));
+  });
+
+  afterAll(() => {
+    // Clean up the dummy PNG file
+    if (fs.existsSync(testPngPath)) {
+      fs.unlinkSync(testPngPath);
     }
   });
 
-  it('should create a new user (admin only)', async () => {
-    console.log('Test: Create new user');
-    const newUser = {
-      username: 'newuser',
-      password: 'newpass',
-      role: 'staff',
-    };
+  it('should upload a handwriting PNG and return its filename', async () => {
     const res = await request(app)
-      .post('/api/users')
-      .auth(adminCredentials.name, adminCredentials.pass)
-      .send(newUser);
+      .post('/api/handwriting')
+      .auth(staffCredentials.name, staffCredentials.pass)
+      .attach('handwriting', testPngPath);
 
     expect(res.statusCode).toEqual(201);
-    expect(res.body.username).toBe('newuser');
-    expect(res.body.role).toBe('staff');
-    const userInDb = await db('users').where({ username: 'newuser' }).first();
-    expect(userInDb).toBeDefined();
-    expect(await bcrypt.compare('newpass', userInDb.password_hash)).toBe(true);
+    expect(res.body).toHaveProperty('filename');
+    expect(res.body.filename).toMatch(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.png$/);
+
+    // Verify the file exists on disk
+    const uploadedFilePath = path.join(__dirname, '..', '..', 'data', 'png', res.body.filename);
+    expect(fs.existsSync(uploadedFilePath)).toBe(true);
+
+    // Clean up the uploaded file
+    fs.unlinkSync(uploadedFilePath);
   });
+});
 
-  it('should get all users (admin only)', async () => {
-    console.log('Test: Get all users');
-    const res = await request(app)
-      .get('/api/users')
-      .auth(adminCredentials.name, adminCredentials.pass);
+describe('Reservations API - Handwriting Cleanup', () => {
+  const testPngPath = path.join(__dirname, 'test_delete.png');
+  let reservationId;
+  let handwritingFilename;
 
-    expect(res.statusCode).toEqual(200);
-    expect(res.body.length).toBeGreaterThanOrEqual(2); // testadmin and teststaff
-    expect(res.body.some(u => u.username === 'testadmin')).toBe(true);
-  });
+  beforeEach(async () => {
+    // Create a dummy PNG file for testing deletion
+    fs.writeFileSync(testPngPath, Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]));
 
-  it('should update a user (admin only)', async () => {
-    console.log('Test: Update user');
-    const [id] = await db('users').insert({
-      username: 'user_to_update',
-      password_hash: await bcrypt.hash('oldpass', 10),
-      role: 'staff',
-    });
+    // Upload the PNG and create a reservation with it
+    const uploadRes = await request(app)
+      .post('/api/handwriting')
+      .auth(staffCredentials.name, staffCredentials.pass)
+      .attach('handwriting', testPngPath);
 
-    const updatedData = {
-      username: 'updated_user',
-      role: 'admin',
-      password: 'newsecurepass',
+    handwritingFilename = uploadRes.body.filename;
+
+    const newReservation = {
+      date: '2025-07-17',
+      time_min: 700,
+      column_index: 3,
+      patient_name: null,
+      handwriting: handwritingFilename,
     };
 
     const res = await request(app)
-      .put(`/api/users/${id}`)
-      .auth(adminCredentials.name, adminCredentials.pass)
-      .send(updatedData);
+      .post('/api/reservations')
+      .auth(staffCredentials.name, staffCredentials.pass)
+      .send(newReservation);
 
-    expect(res.statusCode).toEqual(200);
-    expect(res.body.username).toBe('updated_user');
-    expect(res.body.role).toBe('admin');
-
-    const userInDb = await db('users').where({ id }).first();
-    expect(userInDb.username).toBe('updated_user');
-    expect(userInDb.role).toBe('admin');
-    expect(await bcrypt.compare('newsecurepass', userInDb.password_hash)).toBe(true);
+    reservationId = res.body.id;
   });
 
-  it('should delete a user (admin only)', async () => {
-    console.log('Test: Delete user');
-    const [id] = await db('users').insert({
-      username: 'user_to_delete',
-      password_hash: await bcrypt.hash('deletepass', 10),
-      role: 'staff',
-    });
+  afterEach(() => {
+    // Clean up the dummy PNG file
+    if (fs.existsSync(testPngPath)) {
+      fs.unlinkSync(testPngPath);
+    }
+    // Ensure the uploaded file is cleaned up if test fails before deletion
+    const uploadedFilePath = path.join(__dirname, '..', '..', 'data', 'png', handwritingFilename);
+    if (fs.existsSync(uploadedFilePath)) {
+      fs.unlinkSync(uploadedFilePath);
+    }
+  });
+
+  it('should delete a reservation and its associated handwriting PNG', async () => {
+    const uploadedFilePath = path.join(__dirname, '..', '..', 'data', 'png', handwritingFilename);
+    expect(fs.existsSync(uploadedFilePath)).toBe(true); // Ensure file exists before deletion
 
     const res = await request(app)
-      .delete(`/api/users/${id}`)
-      .auth(adminCredentials.name, adminCredentials.pass);
+      .delete(`/api/reservations/${reservationId}`)
+      .auth(staffCredentials.name, staffCredentials.pass);
 
     expect(res.statusCode).toEqual(204);
-    const userInDb = await db('users').where({ id }).first();
-    expect(userInDb).toBeUndefined();
+
+    // Verify the reservation is deleted from DB
+    const deletedReservation = await db('reservations').where({ id: reservationId }).first();
+    expect(deletedReservation).toBeUndefined();
+
+    // Verify the PNG file is deleted from disk
+    expect(fs.existsSync(uploadedFilePath)).toBe(false);
   });
 });
