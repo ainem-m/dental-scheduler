@@ -1,0 +1,19 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+      - "5173:5173"
+    volumes:
+      - ./data:/app/data
+      - ./server:/app/server
+      - ./client:/app/client
+      - ./package.json:/app/package.json
+      - ./knexfile.js:/app/knexfile.js
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    # The command to run when the container starts
+    command: npm run dev:concurrently
+    restart: unless-stopped

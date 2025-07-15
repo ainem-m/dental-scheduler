@@ -1,0 +1,285 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require("socket.io");
+const db = require('./db');
+const auth = require('basic-auth');
+const bcrypt = require('bcrypt');
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
+
+const PORT = process.env.PORT || 3000;
+
+app.use(express.json()); // Enable JSON body parsing
+
+// Authentication Middleware
+const authenticate = async (req, res, next) => {
+  const credentials = auth(req);
+
+  if (!credentials) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Dental Scheduler"');
+    return res.status(401).send('Authentication required.');
+  }
+
+  try {
+    const user = await db('users').where({ username: credentials.name }).first();
+
+    if (!user || !(await bcrypt.compare(credentials.pass, user.password_hash))) {
+      res.setHeader('WWW-Authenticate', 'Basic realm="Dental Scheduler"');
+      return res.status(401).send('Invalid credentials.');
+    }
+
+    req.user = user; // Attach user to request
+    next();
+  } catch (err) {
+    console.error('Authentication error:', err);
+    res.status(500).json({ error: 'Authentication failed.' });
+  }
+};
+
+// Authorization Middleware
+const authorize = (role) => (req, res, next) => {
+  if (!req.user || req.user.role !== role) {
+    return res.status(403).json({ error: 'Forbidden: Insufficient permissions.' });
+  }
+  next();
+};
+
+// Test DB connection
+db.raw('SELECT 1')
+  .then(() => {
+    console.log('Database connected successfully.');
+  })
+  .catch((err) => {
+    console.error('Failed to connect to database:', err);
+    process.exit(1);
+  });
+
+app.get('/', (req, res) => {
+  res.send('<h1>Dental Scheduler API</h1>');
+});
+
+// Apply authentication to all /api routes
+app.use('/api', authenticate);
+
+// POST /api/reservations - Create a new reservation
+app.post('/api/reservations', async (req, res) => {
+  const { date, time_min, column_index, patient_name, handwriting } = req.body;
+
+  // Basic validation
+  if (!date || time_min === undefined || column_index === undefined || (!patient_name && !handwriting)) {
+    return res.status(400).json({ error: 'Missing required reservation fields.' });
+  }
+
+  try {
+    const [id] = await db('reservations').insert({
+      date,
+      time_min,
+      column_index,
+      patient_name,
+      handwriting,
+    });
+    const newReservation = await db('reservations').where({ id }).first();
+    io.emit('newReservation', newReservation); // Notify clients
+    res.status(201).json(newReservation);
+  } catch (err) {
+    console.error('Error creating reservation:', err);
+    res.status(500).json({ error: 'Failed to create reservation.' });
+  }
+});
+
+// GET /api/reservations - Fetch all reservations, optionally filtered by date
+app.get('/api/reservations', async (req, res) => {
+  try {
+    let query = db('reservations').select('*');
+    if (req.query.date) {
+      query = query.where({ date: req.query.date });
+    }
+    const reservations = await query;
+    res.json(reservations);
+  } catch (err) {
+    console.error('Error fetching reservations:', err);
+    res.status(500).json({ error: 'Failed to fetch reservations' });
+  }
+});
+
+// PUT /api/reservations/:id - Update an existing reservation
+app.put('/api/reservations/:id', async (req, res) => {
+  const { id } = req.params;
+  const { date, time_min, column_index, patient_name, handwriting } = req.body;
+
+  if (!date || time_min === undefined || column_index === undefined || (!patient_name && !handwriting)) {
+    return res.status(400).json({ error: 'Missing required reservation fields for update.' });
+  }
+
+  try {
+    const updatedRows = await db('reservations').where({ id }).update({
+      date,
+      time_min,
+      column_index,
+      patient_name,
+      handwriting,
+      updated_at: db.fn.now(), // Update timestamp
+    });
+
+    if (updatedRows === 0) {
+      return res.status(404).json({ error: 'Reservation not found.' });
+    }
+
+    const updatedReservation = await db('reservations').where({ id }).first();
+    io.emit('updateReservation', updatedReservation); // Notify clients
+    res.json(updatedReservation);
+  } catch (err) {
+    console.error('Error updating reservation:', err);
+    res.status(500).json({ error: 'Failed to update reservation.' });
+  }
+});
+
+// DELETE /api/reservations/:id - Delete a reservation
+app.delete('/api/reservations/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const deletedRows = await db('reservations').where({ id }).del();
+
+    if (deletedRows === 0) {
+      return res.status(404).json({ error: 'Reservation not found.' });
+    }
+
+    io.emit('deleteReservation', id); // Notify clients
+    res.status(204).send(); // No content for successful deletion
+  } catch (err) {
+    console.error('Error deleting reservation:', err);
+    res.status(500).json({ error: 'Failed to delete reservation.' });
+  }
+});
+
+// User Management Endpoints (Admin only)
+// POST /api/users - Create a new user
+app.post('/api/users', authorize('admin'), async (req, res) => {
+  const { username, password, role } = req.body;
+
+  if (!username || !password || !role) {
+    return res.status(400).json({ error: 'Missing username, password, or role.' });
+  }
+
+  try {
+    const existingUser = await db('users').where({ username }).first();
+    if (existingUser) {
+      return res.status(409).json({ error: 'Username already exists.' });
+    }
+
+    const password_hash = await bcrypt.hash(password, 10); // Hash password
+    const [id] = await db('users').insert({
+      username,
+      password_hash,
+      role,
+    });
+    const newUser = await db('users').where({ id }).first();
+    // Omit password_hash from response for security
+    const { password_hash: _, ...userWithoutHash } = newUser;
+    res.status(201).json(userWithoutHash);
+  } catch (err) {
+    console.error('Error creating user:', err);
+    res.status(500).json({ error: 'Failed to create user.' });
+  }
+});
+
+// GET /api/users - Get all users
+app.get('/api/users', authorize('admin'), async (req, res) => {
+  try {
+    const users = await db('users').select('id', 'username', 'role', 'created_at', 'updated_at');
+    res.json(users);
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ error: 'Failed to fetch users.' });
+  }
+});
+
+// PUT /api/users/:id - Update a user
+app.put('/api/users/:id', authorize('admin'), async (req, res) => {
+  const { id } = req.params;
+  const { username, password, role } = req.body;
+
+  if (!username && !password && !role) {
+    return res.status(400).json({ error: 'No fields provided for update.' });
+  }
+
+  try {
+    const updateData = {};
+    if (username) updateData.username = username;
+    if (role) updateData.role = role;
+    if (password) updateData.password_hash = await bcrypt.hash(password, 10);
+    updateData.updated_at = db.fn.now();
+
+    const updatedRows = await db('users').where({ id }).update(updateData);
+
+    if (updatedRows === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const updatedUser = await db('users').where({ id }).first();
+    const { password_hash: _, ...userWithoutHash } = updatedUser;
+    res.json(userWithoutHash);
+  } catch (err) {
+    console.error('Error updating user:', err);
+    res.status(500).json({ error: 'Failed to update user.' });
+  }
+});
+
+// DELETE /api/users/:id - Delete a user
+app.delete('/api/users/:id', authorize('admin'), async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const deletedRows = await db('users').where({ id }).del();
+
+    if (deletedRows === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    res.status(204).send();
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    res.status(500).json({ error: 'Failed to delete user.' });
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('a user connected');
+  socket.on('disconnect', () => {
+    console.log('user disconnected');
+  });
+});
+
+function startServer(port, callback) {
+  return server.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+    if (callback) callback();
+  });
+}
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, closing server...');
+  server.close(() => {
+    console.log('Server closed.');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, closing server...');
+  server.close(() => {
+    console.log('Server closed.');
+    process.exit(0);
+  });
+});
+
+// If this file is run directly (not imported as a module), start the server
+if (require.main === module) {
+  startServer(PORT);
+}
+
+module.exports = { app, server, io, startServer }; // Export startServer for testing

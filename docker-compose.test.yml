@@ -1,0 +1,6 @@
+version: "3.9"
+services:
+  app:
+    # commandを上書きして、何もしないで待機状態にする
+    # これにより、テスト実行時に不要なサーバーが起動するのを防ぐ
+    command: tail -f /dev/null
