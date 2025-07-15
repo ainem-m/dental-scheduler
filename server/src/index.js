@@ -16,6 +16,7 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json()); // Enable JSON body parsing
+app.use('/png', express.static(path.join(__dirname, '..', '..', 'data', 'png')));
 
 // Authentication Middleware
 const authenticate = async (req, res, next) => {

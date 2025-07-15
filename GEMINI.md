@@ -246,4 +246,9 @@ jobs:
 
 ⸻
 
+📜 運用ルール
+	•	進捗が出たら `log.md` に追記し、GitHub に push すること。
+
+⸻
+
 © 2025 Dental Scheduler Project

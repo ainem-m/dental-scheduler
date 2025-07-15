@@ -1,27 +1,38 @@
 import { ref, watch } from 'vue';
 
-export function useGridDrawer(canvasRef, reservations) { // reservations を引数で受け取る
+export function useGridDrawer(canvasRef, reservations) {
   const ctx = ref(null);
 
   // --- 定数 ---
   const COLUMNS = 10;
   const START_HOUR = 9;
   const END_HOUR = 18;
-  const ROW_HEIGHT = 20; // 5分あたりの高さ
+  const ROW_HEIGHT = 20;
   const HEADER_HEIGHT = 30;
   const COLUMN_WIDTH = 100;
   const TIME_MARKER_WIDTH = 60;
 
+  function getContext() {
+    return ctx.value;
+  }
+
   function initializeCanvas() {
     const canvas = canvasRef.value;
     if (!canvas) return;
-    ctx.value = canvas.getContext('2d');
+    const context = canvas.getContext('2d');
+    ctx.value = context;
     
     const totalMinutes = (END_HOUR - START_HOUR) * 60;
     const totalRows = totalMinutes / 5;
 
     canvas.width = TIME_MARKER_WIDTH + COLUMNS * COLUMN_WIDTH;
     canvas.height = HEADER_HEIGHT + totalRows * ROW_HEIGHT;
+
+    // 描画スタイルの設定
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.lineWidth = 2;
+    context.strokeStyle = '#000'; // 手書き線の色
   }
 
   function drawGrid() {
@@ -30,7 +41,8 @@ export function useGridDrawer(canvasRef, reservations) { // reservations を引�
     const canvas = canvasRef.value;
 
     context.clearRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = '#e0e0e0';
+    context.strokeStyle = '#e0e0e0'; // グリッド線の色
+    context.lineWidth = 1; // グリッド線の太さ
     context.font = '12px sans-serif';
     context.fillStyle = '#333';
 
@@ -65,7 +77,11 @@ export function useGridDrawer(canvasRef, reservations) { // reservations を引�
       }
     }
     
-    drawReservations(); // 予約を描画
+    // 描画スタイルを再度手書き用に設定
+    context.strokeStyle = '#000';
+    context.lineWidth = 2;
+
+    drawReservations();
   }
 
   // 予約を描画する
@@ -78,18 +94,28 @@ export function useGridDrawer(canvasRef, reservations) { // reservations を引�
     context.textBaseline = 'middle';
 
     reservations.value.forEach(res => {
-      const x = TIME_MARKER_WIDTH + res.column_index * COLUMN_WIDTH + COLUMN_WIDTH / 2;
-      const y = HEADER_HEIGHT + ((res.time_min - START_HOUR * 60) / 5) * ROW_HEIGHT + ROW_HEIGHT / 2;
+      const cellX = TIME_MARKER_WIDTH + res.column_index * COLUMN_WIDTH;
+      const cellY = HEADER_HEIGHT + ((res.time_min - START_HOUR * 60) / 5) * ROW_HEIGHT;
       
       if (res.patient_name) {
         context.fillStyle = '#2563eb'; // 青色
-        context.fillText(res.patient_name, x, y);
+        const textX = cellX + COLUMN_WIDTH / 2;
+        const textY = cellY + ROW_HEIGHT / 2;
+        context.fillText(res.patient_name, textX, textY);
+      } else if (res.handwriting) {
+        const img = new Image();
+        img.onload = () => {
+          // 画像をセルのサイズに合わせて描画
+          context.drawImage(img, cellX, cellY, COLUMN_WIDTH, ROW_HEIGHT);
+        };
+        img.onerror = () => {
+          console.error(`画像の読み込みに失敗: ${res.handwriting}`);
+        };
+        img.src = `/png/${res.handwriting}`;
       }
-      // TODO: 手書き画像 (handwriting) の描画
     });
   }
   
-  // マウスイベントからグリッド座標を取得
   function getCoordinatesFromMouseEvent(event) {
     const canvas = canvasRef.value;
     if (!canvas) return null;
@@ -99,7 +125,7 @@ export function useGridDrawer(canvasRef, reservations) { // reservations を引�
     const y = event.clientY - rect.top;
 
     if (x < TIME_MARKER_WIDTH || y < HEADER_HEIGHT) {
-      return null; // ヘッダーまたは時間マーカーエリアは対象外
+      return null;
     }
 
     const columnIndex = Math.floor((x - TIME_MARKER_WIDTH) / COLUMN_WIDTH);
@@ -114,12 +140,12 @@ export function useGridDrawer(canvasRef, reservations) { // reservations を引�
     return null;
   }
   
-  // reservationsが変更されたら再描画
   watch(reservations, drawGrid, { deep: true });
 
   return {
     initializeCanvas,
     drawGrid,
     getCoordinatesFromMouseEvent,
+    getContext, // エクスポートする
   };
 }

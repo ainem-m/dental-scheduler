@@ -26,7 +26,7 @@
 - **サーバーからの接続:** Expressサーバーからデータベースへの接続を確立済み (`Database connected successfully.`のログを確認)。
 - **テストデータ投入 (Seeding):**
   - パスワードハッシュ化のため`bcrypt`をインストール済み。
-  - `admin`と`staff`の2ユー���ーを`users`テーブルに登録するシードファイルを作成し、実行済み。
+  - `admin`と`staff`の2ユー�����ーを`users`テーブルに登録するシードファイルを作成し、実行済み。
 
 ## 5. better-sqlite3 への移行とテスト環境の整備
 - **better-sqlite3 への移行:**
@@ -59,7 +59,7 @@
   - `Reservations API - Handwriting Cleanup` テストスイートを追加し、予約削除時に手書き PNG ファイルが正しく削除されることを検証。
   - `server/tests/api.test.js` で `path` が `ReferenceError` となる問題を修正するため、`fs` と `path` の `require` ステートメントをファイルの先頭に移動。
   - `Socket.IO Events` テストで `done()` コールバックが非推奨であることと、`patient_name` が `null` になる問題を解決。
-    - テストを `async/await` に変更し、`done()` コールバックを削除。
+    - テストを `async/await` に変更し、`done()` コールバックを削��。
     - `clientSocket.on('newReservation', ...)` の中で `patient_name` が `'Socket Patient'` の場合のみ `resolve()` するようにロジックを修正し、テストの独立性を向上。
 - **Docker 環境でのモジュール解決問題の解決:**
   - `Cannot find module 'uuid'` エラーが継続して発生する問題に対し、`docker-compose.yml` からすべてのコード関連のボリュームマウント（`./server`, `./client`, `./package.json`, `./knexfile.js`）を削除。
@@ -94,5 +94,9 @@
   - 不要なテストファイル (`client/tests/example.test.js`) を削除。
   - サーバーサイドの `uuid` モジュールのインポートパスを修正。
 - **現在の状態:**
-  - 複数のクライアント（ブラウザータブ）間で、予約がリアルタイムに同��されることを確認。
+  - 複数のクライアント（ブラウザータブ）間で、予約がリア��タイムに同��されることを確認。
   - フロントエンドとバックエンドが WebSocket を介して連携する、基本的な機能が完成。
+
+## 8. Gemini CLI 初期化 (2025-07-15)
+- Gemini CLI が起動し、プロジェクトのコンテキストを正常に読み込みました。
+- 既存の `log.md` を確認し、これまでの進捗を把握しました。
