@@ -5,7 +5,7 @@ const db = require('./db');
 const auth = require('basic-auth');
 const bcrypt = require('bcrypt');
 const multer = require('multer');
-const { v4: uuidv4 } = require('/app/node_modules/uuid');
+const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 
