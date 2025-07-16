@@ -62,7 +62,7 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
         context.fillStyle = 'rgba(0, 123, 255, 0.8)';
         context.fillRect(x, y, state.cellWidth, state.cellHeight);
 
-        // 2. Draw handwriting if it exists
+        // 2. Draw handwriting if it exists (top half of the cell)
         if (res.handwriting) {
           try {
             const img = new Image();
@@ -74,22 +74,22 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
               };
               img.src = `/api/handwriting/${res.handwriting}`;
             });
-            context.drawImage(img, x, y, state.cellWidth, state.cellHeight);
+            context.drawImage(img, x, y, state.cellWidth, state.cellHeight / 2); // Draw in top half
           } catch (error) {
             // Continue even if image fails to load
           }
         }
 
-        // 3. Draw patient name on top
+        // 3. Draw patient name on top (bottom half of the cell)
         if (res.patient_name) {
           context.textAlign = 'center';
           context.textBaseline = 'middle';
-          context.font = 'bold 14px Arial';
+          context.font = 'bold 10px Arial'; // Smaller font for patient name
           context.strokeStyle = 'black'; // Black stroke for contrast
-          context.lineWidth = 3;
-          context.strokeText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
+          context.lineWidth = 2;
+          context.strokeText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight * 3 / 4); // Draw in bottom half
           context.fillStyle = 'white'; // White fill
-          context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
+          context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight * 3 / 4); // Draw in bottom half
         }
         
         resolve();

@@ -12,9 +12,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue';
+import { ref, onMounted, reactive, onUnmounted } from 'vue';
 import ReservationModal from './ReservationModal.vue';
 import { useGridDrawer } from '../composables/useGridDrawer';
+import { useSocket } from '../composables/useSocket';
 
 const canvas = ref(null);
 const ctx = ref(null);
@@ -35,6 +36,7 @@ const config = reactive({
   timeColumnWidth: 80,
   lineColor: '#ccc',
   lineWidth: 1,
+  cellHeightFixed: 80, // 固定の予約枠の高さ
 });
 
 // --- Derived Properties ---
@@ -48,67 +50,34 @@ const state = reactive({
 
 // --- useGridDrawer から関数をインポート ---
 const { drawGrid, drawReservations, getCoordinatesFromMouseEvent } = useGridDrawer(canvas, reservations, config, state, ctx);
+const { on, off, emit } = useSocket();
 
-// --- API Functions ---
-const fetchReservations = async () => {
-  try {
-    const response = await fetch(`/api/reservations?date=${currentDate.value}`);
-    if (!response.ok) throw new Error('Failed to fetch reservations');
-    const data = await response.json();
-    reservations.splice(0, reservations.length, ...data); // Replace array content
-    console.log('Fetched reservations:', reservations);
-    draw();
-  } catch (error) {
-    console.error('Error fetching reservations:', error);
-  }
+// --- Socket.IO Functions ---
+const fetchReservations = () => {
+  emit('fetch-reservations', currentDate.value);
 };
 
-const saveReservation = async (reservation) => {
-  try {
-    const method = reservation.id ? 'PUT' : 'POST';
-    const url = reservation.id ? `/api/reservations/${reservation.id}` : '/api/reservations';
-
-    const response = await fetch(url, {
-      method: method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reservation),
-    });
-
-    if (!response.ok) throw new Error(`Failed to ${method === 'PUT' ? 'update' : 'save'} reservation`);
-
-    const savedReservation = await response.json();
-    
-    // Update local state
-    const index = reservations.findIndex(r => r.id === savedReservation.id);
-    if (index !== -1) {
-        reservations[index] = savedReservation;
-    } else {
-        reservations.push(savedReservation);
-    }
-    
-    draw();
-  } catch (error) {
-    console.error(error);
-  }
+const saveReservation = (reservation) => {
+  emit('save-reservation', reservation);
 };
 
-const deleteReservation = async (id) => {
-  try {
-    const response = await fetch(`/api/reservations/${id}`, {
-      method: 'DELETE',
-    });
-    if (!response.ok) throw new Error('Failed to delete reservation');
-
-    // Remove from local state
-    const index = reservations.findIndex(r => r.id === id);
-    if (index !== -1) {
-      reservations.splice(index, 1);
-    }
-    draw();
-  } catch (error) {
-    console.error('Error deleting reservation:', error);
-  }
+const deleteReservation = (id) => {
+  emit('delete-reservation', id);
 };
+
+// --- Socket.IO Event Handlers ---
+onMounted(() => {
+  on('reservations-updated', (updatedReservations) => {
+    console.log('reservations-updated received:', updatedReservations);
+    reservations.splice(0, reservations.length, ...updatedReservations);
+    drawReservations();
+    draw();
+  });
+});
+
+onUnmounted(() => {
+  off('reservations-updated');
+});
 
 
 // --- Drawing Functions ---
@@ -154,7 +123,10 @@ const setupCanvas = () => {
   const rect = parent.getBoundingClientRect();
 
   state.canvasWidth = rect.width;
-  state.canvasHeight = rect.height;
+  // Canvasの高さは固定のセル高さとスロット数に基づいて計算
+  state.totalSlots = ((config.endHour - config.startHour) * 60) / config.timeSlotInterval;
+  state.cellHeight = config.cellHeightFixed; // 固定のセル高さを設定
+  state.canvasHeight = config.headerHeight + state.totalSlots * state.cellHeight;
 
   canvas.value.width = state.canvasWidth * dpr;
   canvas.value.height = state.canvasHeight * dpr;
@@ -165,9 +137,7 @@ const setupCanvas = () => {
   canvas.value.style.height = `${state.canvasHeight}px`;
 
   // Recalculate derived properties
-  state.totalSlots = ((config.endHour - config.startHour) * 60) / config.timeSlotInterval;
   state.cellWidth = (state.canvasWidth - config.timeColumnWidth) / config.columns;
-  state.cellHeight = (state.canvasHeight - config.headerHeight) / state.totalSlots;
   
   draw();
 };
@@ -211,6 +181,7 @@ const onMouseDown = (event) => {
   }
 
   isModalVisible.value = true;
+  console.log('isModalVisible set to true', isModalVisible.value);
 };
 
 const handleSaveReservation = (savedReservation) => {
@@ -238,6 +209,7 @@ onMounted(() => {
   width: 100%;
   height: 80vh; /* Example height */
   border: 1px solid black;
+  overflow-y: auto; /* 縦スクロールを有効にする */
 }
 canvas {
   display: block;
