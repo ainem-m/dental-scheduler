@@ -4,18 +4,6 @@
       <h3>予約情報入力</h3>
       <form @submit.prevent="save">
         <div class="form-group">
-          <label>入力方法:</label>
-          <div class="input-method-toggle">
-            <label>
-              <input type="radio" value="text" v-model="inputMethod" /> テキスト
-            </label>
-            <label>
-              <input type="radio" value="handwriting" v-model="inputMethod" /> 手書き
-            </label>
-          </div>
-        </div>
-
-        <div v-if="inputMethod === 'text'" class="form-group">
           <label for="patient-name">患者名</label>
           <input
             id="patient-name"
@@ -25,7 +13,7 @@
           />
         </div>
 
-        <div v-if="inputMethod === 'handwriting'" class="form-group">
+        <div class="form-group">
           <label>手書き入力</label>
           <canvas
             ref="handwritingCanvas"
@@ -68,7 +56,6 @@ const patientNameInput = ref(null);
 const handwritingCanvas = ref(null);
 const ctx = ref(null);
 const isDrawing = ref(false);
-const inputMethod = ref('text'); // 'text' or 'handwriting'
 
 // Initialize canvas on mount
 onMounted(() => {
@@ -81,38 +68,24 @@ onMounted(() => {
 watch(() => props.show, (newVal) => {
   if (newVal) {
     editableReservation.value = { ...props.reservation };
-    // Determine initial input method based on existing data
-    if (editableReservation.value.handwriting) {
-      inputMethod.value = 'handwriting';
-      // If there's existing handwriting, load it onto the canvas
-      const img = new Image();
-      img.onload = () => {
-        ctx.value.clearRect(0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
-        ctx.value.drawImage(img, 0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
-      };
-      img.src = `/api/handwriting/${editableReservation.value.handwriting}`; // Assuming this endpoint serves the image
-    } else {
-      inputMethod.value = 'text';
-    }
     nextTick(() => {
-      if (inputMethod.value === 'text') {
-        patientNameInput.value?.focus();
-      }
+      patientNameInput.value?.focus();
       setupCanvas(); // Ensure canvas is set up when modal opens
+      // If there's existing handwriting, load it onto the canvas
+      if (editableReservation.value.handwriting) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.value.clearRect(0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
+          ctx.value.drawImage(img, 0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
+        };
+        img.src = `/api/handwriting/${editableReservation.value.handwriting}`;
+      } else {
+        clearCanvas(); // Clear canvas if no existing handwriting
+      }
     });
   } else {
     // Reset canvas when modal closes
     clearCanvas();
-  }
-});
-
-watch(inputMethod, (newMethod) => {
-  if (newMethod === 'text') {
-    editableReservation.value.handwriting = null; // Clear handwriting if switching to text
-    clearCanvas();
-    nextTick(() => patientNameInput.value?.focus());
-  } else {
-    editableReservation.value.patient_name = ''; // Clear patient name if switching to handwriting
   }
 });
 
@@ -173,33 +146,30 @@ const clearCanvas = () => {
 };
 
 const save = async () => {
-  if (inputMethod.value === 'handwriting') {
-    if (handwritingCanvas.value.toDataURL('image/png') === getBlankCanvasDataURL()) {
-      // If canvas is blank, treat as no handwriting input
-      editableReservation.value.handwriting = null;
-    } else {
-      // Upload handwriting image
-      const blob = await new Promise(resolve => handwritingCanvas.value.toBlob(resolve, 'image/png'));
-      const formData = new FormData();
-      formData.append('handwriting', blob, 'handwriting.png');
+  // Always attempt to upload handwriting if drawn
+  if (handwritingCanvas.value.toDataURL('image/png') !== getBlankCanvasDataURL()) {
+    const blob = await new Promise(resolve => handwritingCanvas.value.toBlob(resolve, 'image/png'));
+    const formData = new FormData();
+    formData.append('handwriting', blob, 'handwriting.png');
 
-      try {
-        const response = await fetch('/api/handwriting', {
-          method: 'POST',
-          body: formData,
-        });
-        if (!response.ok) throw new Error('Failed to upload handwriting');
-        const data = await response.json();
-        editableReservation.value.handwriting = data.filename; // Store the filename returned by the server
-        editableReservation.value.patient_name = ''; // Clear patient name if handwriting is used
-      } catch (error) {
-        console.error('Handwriting upload error:', error);
-        alert('手書き画像のアップロードに失敗しました。');
-        return; // Prevent saving reservation if upload fails
-      }
+    try {
+      const response = await fetch('/api/handwriting', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) throw new Error('Failed to upload handwriting');
+      const data = await response.json();
+      editableReservation.value.handwriting = data.filename; // Store the filename returned by the server
+    } catch (error) {
+      console.error('Handwriting upload error:', error);
+      alert('手書き画像のアップロードに失敗しました。');
+      return; // Prevent saving reservation if upload fails
     }
   } else {
-    editableReservation.value.handwriting = null; // Clear handwriting if text is used
+    // If canvas is blank and there was no existing handwriting, clear it
+    if (!props.reservation?.handwriting) {
+      editableReservation.value.handwriting = null;
+    }
   }
 
   emit('save', editableReservation.value);

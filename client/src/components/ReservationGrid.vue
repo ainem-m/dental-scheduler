@@ -159,18 +159,26 @@ const drawReservations = () => {
     context.fillStyle = 'rgba(0, 123, 255, 0.8)';
     context.fillRect(x, y, state.cellWidth, state.cellHeight);
 
-    if (res.patient_name) {
+    if (res.handwriting) {
+      const img = new Image();
+      img.onload = () => {
+        context.drawImage(img, x, y, state.cellWidth, state.cellHeight);
+        // If patient name also exists, draw it on top of the image
+        if (res.patient_name) {
+          context.fillStyle = 'white'; // Or a contrasting color
+          context.font = '12px Arial';
+          context.textAlign = 'center';
+          context.textBaseline = 'middle';
+          context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
+        }
+      };
+      img.src = `/api/handwriting/${res.handwriting}`;
+    } else if (res.patient_name) {
       context.fillStyle = 'white';
       context.font = '12px Arial';
       context.textAlign = 'center';
       context.textBaseline = 'middle';
       context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
-    } else if (res.handwriting) {
-      const img = new Image();
-      img.onload = () => {
-        context.drawImage(img, x, y, state.cellWidth, state.cellHeight);
-      };
-      img.src = `/api/handwriting/${res.handwriting}`;
     }
   });
 };
