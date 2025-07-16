@@ -104,6 +104,7 @@ app.post('/api/reservations', async (req, res) => {
     return res.status(400).json({ error: 'Missing required reservation fields.' });
   }
 
+  console.log('Received POST /api/reservations request with body:', req.body);
   try {
     const [id] = await db('reservations').insert({
       date,
@@ -113,12 +114,11 @@ app.post('/api/reservations', async (req, res) => {
       handwriting,
     });
     const newReservation = await db('reservations').where({ id }).first();
-    console.log('newReservation.patient_name:', newReservation.patient_name); // <-- Add this line
     io.emit('newReservation', newReservation); // Notify clients
     res.status(201).json(newReservation);
   } catch (err) {
     console.error('Error creating reservation:', err);
-    res.status(500).json({ error: 'Failed to create reservation.' });
+    res.status(500).json({ error: 'Failed to create reservation.', details: err.message });
   }
 });
 
@@ -146,6 +146,7 @@ app.put('/api/reservations/:id', async (req, res) => {
     return res.status(400).json({ error: 'Missing required reservation fields for update.' });
   }
 
+  console.log('Received PUT /api/reservations/:id request with body:', req.body);
   try {
     const updatedRows = await db('reservations').where({ id }).update({
       date,
@@ -165,7 +166,7 @@ app.put('/api/reservations/:id', async (req, res) => {
     res.json(updatedReservation);
   } catch (err) {
     console.error('Error updating reservation:', err);
-    res.status(500).json({ error: 'Failed to update reservation.' });
+    res.status(500).json({ error: 'Failed to update reservation.', details: err.message });
   }
 });
 

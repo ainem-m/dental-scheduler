@@ -85,7 +85,7 @@
   - Vue 3 の Composition API を使用して、`useSocket.js` と `useGridDrawer.js` を作成。
   - `useSocket.js`: Socket.IO サーバーへの接続、イベントの送受信を管理する composable。
   - `useGridDrawer.js`: Canvas の描画ロジックをカプセル化し、予約データをグリッドに描画する責務を持つ composable。
-  - `ReservationGrid.vue`:
+  - `ReservationGrid.vue`:`
     - `useSocket` と `useGridDrawer` を利用して、リアルタイムなデータ更新と Canvas 描画を連携。
     - Canvas クリック時に、患者名を入力するプロンプトを表示し、入力された名前で `create-reservation` イベントをサーバーに送信。
     - `new-reservation` イベント受信時に、ローカルの予約データを更新し、Canvas を再描画。
@@ -166,3 +166,18 @@
   - `clearCanvas` 関数で描画スタイルが適切に再適用されるように修正。
 - **結果:**
   - 上記修正により、手書き描画機能が正常に動作することを確認。
+
+## 6. 予約の更新・削除機能の修正 (2025-07-16)
+- **問題の特定:**
+  - 予約の保存時に `UNIQUE constraint failed` エラーが発生し、既存の予約を更新できない問題を確認。
+  - これは、既存の予約に対して常に `POST` リクエスト（新規作成）を送信していたためと判明。
+- **修正内容:**
+  - `client/src/components/ReservationGrid.vue` の `saveReservation` 関数を修正。
+    - 予約データに `id` が存在する場合は `PUT` リクエスト（更新）を、存在しない場合は `POST` リクエスト（新規作成）を送信するように変更。
+  - `client/src/components/ReservationGrid.vue` に `deleteReservation` 関数を追加し、`DELETE` リクエストを送信するように実装。
+  - `client/src/components/ReservationModal.vue` に削除ボタンを追加し、既存の予約の場合に表示されるように変更。
+  - `ReservationModal.vue` から `delete` イベントをエミットし、`ReservationGrid.vue` でそのイベントを捕捉して `deleteReservation` 関数を呼び出すように連携。
+  - `server/src/index.js` の `POST /api/reservations` および `PUT /api/reservations/:id` エンドポイントに、より詳細なエラーログを追加。
+- **結果:**
+  - 既存の予約の更新および削除が正常に機能することを確認。
+  - サーバーサイドのエラーログが改善され、デバッグが容易になった。

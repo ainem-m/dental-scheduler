@@ -35,6 +35,12 @@
         <div class="form-actions">
           <button type="button" @click="close">キャンセル</button>
           <button type="submit">保存</button>
+          <button
+            v-if="editableReservation.id"
+            type="button"
+            class="delete-button"
+            @click="handleDelete"
+          >削除</button>
         </div>
       </form>
     </div>
@@ -49,7 +55,7 @@ const props = defineProps({
   reservation: Object,
 });
 
-const emit = defineEmits(['close', 'save']);
+const emit = defineEmits(['close', 'save', 'delete']);
 
 const editableReservation = ref({});
 const patientNameInput = ref(null);
@@ -220,6 +226,13 @@ const getBlankCanvasDataURL = () => {
 const close = () => {
   emit('close');
 };
+
+const handleDelete = () => {
+  if (confirm('この予約を削除してもよろしいですか？')) {
+    emit('delete', editableReservation.value.id);
+    close();
+  }
+};
 </script>
 
 <style scoped>
@@ -310,7 +323,8 @@ button[type="submit"] {
   color: white;
 }
 
-button[type="button"] {
-  background-color: #f0f0f0;
+button[type="button"].delete-button {
+  background-color: #dc3545;
+  color: white;
 }
 </style>

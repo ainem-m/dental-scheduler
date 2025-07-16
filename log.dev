@@ -1,0 +1,59 @@
+
+> dental-scheduler@0.1.0 dev:concurrently
+> concurrently "npm:start" "npm:dev"
+
+[dev] 
+[dev] > dental-scheduler@0.1.0 dev
+[dev] > vite
+[dev] 
+[start] 
+[start] > dental-scheduler@0.1.0 start
+[start] > node server/src/index.js
+[start] 
+[dev] [33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+[dev] 
+[dev]   VITE v5.4.19  ready in 199 ms
+[dev] 
+[dev]   ➜  Local:   http://localhost:5173/
+[dev]   ➜  Network: http://192.168.1.95:5173/
+[start] Server running on port 3000
+[start] Database connected successfully.
+[start] newReservation.patient_name: 
+[start] Error creating reservation: SqliteError: insert into `reservations` (`column_index`, `date`, `handwriting`, `patient_name`, `time_min`) values (1, '2025-07-16', 'aa3894c4-2920-4f9c-a44b-08973e216059.png', '', 720) - UNIQUE constraint failed: reservations.date, reservations.time_min, reservations.column_index
+[start]     at Client_BetterSQLite3._query (/Users/ainem/dental-scheduler/node_modules/knex/lib/dialects/better-sqlite3/index.js:44:38)
+[start]     at executeQuery (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/internal/query-executioner.js:37:17)
+[start]     at Client_BetterSQLite3.query (/Users/ainem/dental-scheduler/node_modules/knex/lib/client.js:154:12)
+[start]     at Runner.query (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/runner.js:141:36)
+[start]     at ensureConnectionCallback (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/internal/ensure-connection-callback.js:13:17)
+[start]     at Runner.ensureConnection (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/runner.js:318:20)
+[start]     at async Runner.run (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/runner.js:30:19)
+[start]     at async /Users/ainem/dental-scheduler/server/src/index.js:108:18 {
+[start]   code: 'SQLITE_CONSTRAINT_UNIQUE'
+[start] }
+[start] Error creating reservation: SqliteError: insert into `reservations` (`column_index`, `date`, `handwriting`, `patient_name`, `time_min`) values (0, '2025-07-16', '48bebffd-dc4f-4bf3-888c-a41e179698d8.png', '', 810) - UNIQUE constraint failed: reservations.date, reservations.time_min, reservations.column_index
+[start]     at Client_BetterSQLite3._query (/Users/ainem/dental-scheduler/node_modules/knex/lib/dialects/better-sqlite3/index.js:44:38)
+[start]     at executeQuery (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/internal/query-executioner.js:37:17)
+[start]     at Client_BetterSQLite3.query (/Users/ainem/dental-scheduler/node_modules/knex/lib/client.js:154:12)
+[start]     at Runner.query (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/runner.js:141:36)
+[start]     at ensureConnectionCallback (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/internal/ensure-connection-callback.js:13:17)
+[start]     at Runner.ensureConnection (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/runner.js:318:20)
+[start]     at async Runner.run (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/runner.js:30:19)
+[start]     at async /Users/ainem/dental-scheduler/server/src/index.js:108:18 {
+[start]   code: 'SQLITE_CONSTRAINT_UNIQUE'
+[start] }
+[start] Error creating reservation: SqliteError: insert into `reservations` (`column_index`, `date`, `handwriting`, `patient_name`, `time_min`) values (1, '2025-07-16', NULL, 'てすto', 900) - UNIQUE constraint failed: reservations.date, reservations.time_min, reservations.column_index
+[start]     at Client_BetterSQLite3._query (/Users/ainem/dental-scheduler/node_modules/knex/lib/dialects/better-sqlite3/index.js:44:38)
+[start]     at executeQuery (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/internal/query-executioner.js:37:17)
+[start]     at Client_BetterSQLite3.query (/Users/ainem/dental-scheduler/node_modules/knex/lib/client.js:154:12)
+[start]     at Runner.query (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/runner.js:141:36)
+[start]     at ensureConnectionCallback (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/internal/ensure-connection-callback.js:13:17)
+[start]     at Runner.ensureConnection (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/runner.js:318:20)
+[start]     at async Runner.run (/Users/ainem/dental-scheduler/node_modules/knex/lib/execution/runner.js:30:19)
+[start]     at async /Users/ainem/dental-scheduler/server/src/index.js:108:18 {
+[start]   code: 'SQLITE_CONSTRAINT_UNIQUE'
+[start] }
+[dev] 12:50:06 [vite] hmr update /src/components/ReservationGrid.vue
+[dev] 12:50:17 [vite] hmr update /src/components/ReservationModal.vue
+[dev] 12:50:21 [vite] hmr update /src/components/ReservationModal.vue
+[dev] 12:50:25 [vite] hmr update /src/components/ReservationModal.vue
+[dev] 12:50:28 [vite] hmr update /src/components/ReservationGrid.vue

@@ -7,6 +7,7 @@
     :reservation="selectedReservation"
     @close="isModalVisible = false"
     @save="handleSaveReservation"
+    @delete="handleDeleteReservation"
   />
 </template>
 
@@ -26,10 +27,10 @@ const currentDate = ref(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
 
 // --- Grid Configuration ---
 const config = reactive({
-  columns: 10,
+  columns: 6,
   startHour: 9,
   endHour: 18,
-  timeSlotInterval: 15, // in minutes
+  timeSlotInterval: 30, // in minutes
   headerHeight: 50,
   timeColumnWidth: 80,
   lineColor: '#ccc',
@@ -46,7 +47,7 @@ const state = reactive({
 });
 
 // --- useGridDrawer から関数をインポート ---
-const { drawGrid, drawReservations, getCoordinatesFromMouseEvent } = useGridDrawer(canvas, reservations, config, state);
+const { drawGrid, drawReservations, getCoordinatesFromMouseEvent } = useGridDrawer(canvas, reservations, config, state, ctx);
 
 // --- API Functions ---
 const fetchReservations = async () => {
@@ -55,33 +56,57 @@ const fetchReservations = async () => {
     if (!response.ok) throw new Error('Failed to fetch reservations');
     const data = await response.json();
     reservations.splice(0, reservations.length, ...data); // Replace array content
+    console.log('Fetched reservations:', reservations);
+    draw();
+  } catch (error) {
+    console.error('Error fetching reservations:', error);
+  }
+};
+
+const saveReservation = async (reservation) => {
+  try {
+    const method = reservation.id ? 'PUT' : 'POST';
+    const url = reservation.id ? `/api/reservations/${reservation.id}` : '/api/reservations';
+
+    const response = await fetch(url, {
+      method: method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reservation),
+    });
+
+    if (!response.ok) throw new Error(`Failed to ${method === 'PUT' ? 'update' : 'save'} reservation`);
+
+    const savedReservation = await response.json();
+    
+    // Update local state
+    const index = reservations.findIndex(r => r.id === savedReservation.id);
+    if (index !== -1) {
+        reservations[index] = savedReservation;
+    } else {
+        reservations.push(savedReservation);
+    }
+    
     draw();
   } catch (error) {
     console.error(error);
   }
 };
 
-const saveReservation = async (reservation) => {
+const deleteReservation = async (id) => {
   try {
-    const response = await fetch('/api/reservations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reservation),
+    const response = await fetch(`/api/reservations/${id}`, {
+      method: 'DELETE',
     });
-    if (!response.ok) throw new Error('Failed to save reservation');
-    const newReservation = await response.json();
-    
-    // Add to local state
-    const index = reservations.findIndex(r => r.id === newReservation.id);
+    if (!response.ok) throw new Error('Failed to delete reservation');
+
+    // Remove from local state
+    const index = reservations.findIndex(r => r.id === id);
     if (index !== -1) {
-        reservations[index] = newReservation;
-    } else {
-        reservations.push(newReservation);
+      reservations.splice(index, 1);
     }
-    
     draw();
   } catch (error) {
-    console.error(error);
+    console.error('Error deleting reservation:', error);
   }
 };
 
@@ -123,6 +148,7 @@ const drawHeaders = () => {
 };
 
 const setupCanvas = () => {
+  console.log('setupCanvas called');
   const dpr = window.devicePixelRatio || 1;
   const parent = canvas.value.parentElement;
   const rect = parent.getBoundingClientRect();
@@ -148,7 +174,11 @@ const setupCanvas = () => {
 
 const draw = async () => {
   requestAnimationFrame(async () => {
-    if (!ctx.value) return;
+    console.log('draw function called');
+    if (!ctx.value) {
+      console.log('ctx is null in draw function');
+      return;
+    }
     ctx.value.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
     drawGrid(); // useGridDrawer からの drawGrid を呼び出す
     drawHeaders();
@@ -162,18 +192,34 @@ const onMouseDown = (event) => {
   const coordinates = getCoordinatesFromMouseEvent(event);
   if (!coordinates) return;
 
-  selectedReservation.value = {
-    date: currentDate.value,
-    time_min: coordinates.time_min,
-    column_index: coordinates.column_index,
-    patient_name: ''
-  };
+  // Check if there's an existing reservation at these coordinates
+  const existingReservation = reservations.find(res =>
+    res.date === currentDate.value &&
+    res.time_min === coordinates.time_min &&
+    res.column_index === coordinates.column_index
+  );
+
+  if (existingReservation) {
+    selectedReservation.value = { ...existingReservation }; // Populate with existing data
+  } else {
+    selectedReservation.value = {
+      date: currentDate.value,
+      time_min: coordinates.time_min,
+      column_index: coordinates.column_index,
+      patient_name: ''
+    };
+  }
 
   isModalVisible.value = true;
 };
 
 const handleSaveReservation = (savedReservation) => {
   saveReservation(savedReservation);
+  isModalVisible.value = false;
+};
+
+const handleDeleteReservation = (id) => {
+  deleteReservation(id);
   isModalVisible.value = false;
 };
 

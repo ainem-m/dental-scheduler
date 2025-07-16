@@ -159,6 +159,63 @@ test('複数端末リアルタイム同期', async ({ browser }) => {
   }, { timeout: 500 }).toBe('田中');
 });
 
+test('予約の編集が複数端末で同期される', async ({ browser }) => {
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+  const a = await ctxA.newPage();
+  const b = await ctxB.newPage();
+  await a.goto(APP_URL);
+  await b.goto(APP_URL);
+
+  // 端末Aで予約を作成
+  await a.click('[data-cell="10:00-0"]');
+  await a.fill('input[name="patient"]', '編集前患者');
+  await a.click('text=保存');
+
+  // 端末Bで同期されるのを待つ
+  await expect.poll(async () => {
+    return b.locator('[data-cell="10:00-0"]').innerText();
+  }, { timeout: 500 }).toBe('編集前患者');
+
+  // 端末Aで予約を編集
+  await a.click('[data-cell="10:00-0"]'); // 既存の予約をクリックしてモーダルを開く
+  await a.fill('input[name="patient"]', '編集後患者');
+  await a.click('text=保存');
+
+  // 端末Bで編集が同期されるのを待つ
+  await expect.poll(async () => {
+    return b.locator('[data-cell="10:00-0"]').innerText();
+  }, { timeout: 500 }).toBe('編集後患者');
+});
+
+test('予約の削除が複数端末で同期される', async ({ browser }) => {
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+  const a = await ctxA.newPage();
+  const b = await ctxB.newPage();
+  await a.goto(APP_URL);
+  await b.goto(APP_URL);
+
+  // 端末Aで予約を作成
+  await a.click('[data-cell="11:00-0"]');
+  await a.fill('input[name="patient"]', '削除対象患者');
+  await a.click('text=保存');
+
+  // 端末Bで同期されるのを待つ
+  await expect.poll(async () => {
+    return b.locator('[data-cell="11:00-0"]').innerText();
+  }, { timeout: 500 }).toBe('削除対象患者');
+
+  // 端末Aで予約を削除
+  await a.click('[data-cell="11:00-0"]'); // 既存の予約をクリックしてモーダルを開く
+  await a.click('text=削除'); // 削除ボタンをクリック
+
+  // 端末Bで削除が同期されるのを待つ
+  await expect.poll(async () => {
+    return b.locator('[data-cell="11:00-0"]').innerText();
+  }, { timeout: 500 }).toBe(''); // 予約が消えていることを確認
+});
+
 </details>
 
 
