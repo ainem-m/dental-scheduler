@@ -83,6 +83,9 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
+// Serve handwriting PNGs
+app.use('/api/handwriting', express.static(path.join(__dirname, '..', '..', 'data', 'png')));
+
 // POST /api/handwriting - Upload a handwriting PNG
 app.post('/api/handwriting', authenticate, upload.single('handwriting'), (req, res) => {
   if (!req.file) {
@@ -155,7 +158,7 @@ app.put('/api/reservations/:id', async (req, res) => {
 
     if (updatedRows === 0) {
       return res.status(404).json({ error: 'Reservation not found.' });
-    }
+    };
 
     const updatedReservation = await db('reservations').where({ id }).first();
     io.emit('updateReservation', updatedReservation); // Notify clients

@@ -26,7 +26,7 @@
 - **サーバーからの接続:** Expressサーバーからデータベースへの接続を確立済み (`Database connected successfully.`のログを確認)。
 - **テストデータ投入 (Seeding):**
   - パスワードハッシュ化のため`bcrypt`をインストール済み。
-  - `admin`と`staff`の2ユー�����ーを`users`テーブルに登録するシードファイルを作成し、実行済み。
+  - `admin`と`staff`の2ユーザーを`users`テーブルに登録するシードファイルを作成し、実行済み。
 
 ## 5. better-sqlite3 への移行とテスト環境の整備
 - **better-sqlite3 への移行:**
@@ -39,7 +39,7 @@
   - `npm run test:docker` 実行時に `TypeError: input.replace is not a function` エラーが発生。
   - `package.json` の `test` スクリプトを `vitest --workspace` に変更することで解消を試みるも、`Error: Failed to load url /app/true` エラーが発生。
   - `vitest` の `workspace` 設定が Docker 環境で期待通りに動作しないと判断し、`vitest.config.js` から `workspace` 設定を削除。
-  - `package.json` に `test:client` と `test:server` ス���リプトを個別に定義し、それぞれ `vitest run -c vitest.config.js` と `vitest run -c vitest.config.server.js` を実行するように修正。
+  - `package.json` に `test:client` と `test:server` スクリプトを個別に定義し、それぞれ `vitest run -c vitest.config.js` と `vitest run -c vitest.config.server.js` を実行するように修正。
   - `vitest.config.js` をクライアントテスト用に、`vitest.config.server.js` をサーバーテスト用に設定。
 - **テストの成功:**
   - クライアント側のテスト (`client/tests/example.test.js`) は正常にパス。
@@ -59,7 +59,7 @@
   - `Reservations API - Handwriting Cleanup` テストスイートを追加し、予約削除時に手書き PNG ファイルが正しく削除されることを検証。
   - `server/tests/api.test.js` で `path` が `ReferenceError` となる問題を修正するため、`fs` と `path` の `require` ステートメントをファイルの先頭に移動。
   - `Socket.IO Events` テストで `done()` コールバックが非推奨であることと、`patient_name` が `null` になる問題を解決。
-    - テストを `async/await` に変更し、`done()` コールバックを削��。
+    - テストを `async/await` に変更し、`done()` コールバックを削除。
     - `clientSocket.on('newReservation', ...)` の中で `patient_name` が `'Socket Patient'` の場合のみ `resolve()` するようにロジックを修正し、テストの独立性を向上。
 - **Docker 環境でのモジュール解決問題の解決:**
   - `Cannot find module 'uuid'` エラーが継続して発生する問題に対し、`docker-compose.yml` からすべてのコード関連のボリュームマウント（`./server`, `./client`, `./package.json`, `./knexfile.js`）を削除。
@@ -70,7 +70,7 @@
 - **すべてのテストの成功:**
   - 上記の修正により、Docker 環境でのすべてのクライアントおよびサーバーテストが正常にパスすることを確認。
 
-## 現在の���態
+## 現在の状態
 - `better-sqlite3` への移行が完了し、Docker 環境でのビルドも成功。
 - バックエンドの主要な API（予約 CRUD、手書き PNG アップロード、ユーザー管理）が実装され、テストも正常に動作することを確認。
 - クライアントおよびサーバーの Vitest テストが Docker 環境で正常に実行されることを確認。
@@ -94,9 +94,72 @@
   - 不要なテストファイル (`client/tests/example.test.js`) を削除。
   - サーバーサイドの `uuid` モジュールのインポートパスを修正。
 - **現在の状態:**
-  - 複数のクライアント（ブラウザータブ）間で、予約がリア��タイムに同��されることを確認。
+  - 複数のクライアント（ブラウザータブ）間で、予約がリアルタイムに同期されることを確認。
   - フロントエンドとバックエンドが WebSocket を介して連携する、基本的な機能が完成。
 
 ## 8. Gemini CLI 初期化 (2025-07-15)
 - Gemini CLI が起動し、プロジェクトのコンテキストを正常に読み込みました。
 - 既存の `log.md` を確認し、これまでの進捗を把握しました。
+
+# フロントエンド実装ログ (2025-07-16)
+
+## 1. 予約表グリッドの初期描画
+- **`ReservationGrid.vue` の実装:**
+  - `onMounted` フックで Canvas API を使用し、サンプルとして表示されていた青い四角を削除。
+  - 時間軸（行）と診察台（列）からなるグリッド線を描画するロジックを実装。
+  - 列ヘッダー（「診察台 1」など）と時間ヘッダー（「09:00」など）を描画する機能を追加。
+  - ウィンドウリサイズ時にキャンバスを再描画するレスポンシブ対応を実装。
+- **`style.css` の調整:** アプリケーション全体の基本的なスタイリングを適用。
+
+## 2. テキスト予約機能の実装とデータ永続化
+- **`ReservationModal.vue` の作成:**
+  - 患者名を入力するためのモーダルコンポーネントを新規作成。
+  - `v-if` で表示/非表示を切り替え、`props` で予約データを受け取り、`emit` で保存・キャンセルイベントを通知する。
+- **グリッドクリックによるモーダル表示:**
+  - `ReservationGrid.vue` でキャンバスのクリックイベント (`onMouseDown`) を捕捉。
+  - クリックされた座標から、対応する時間と列を計算。
+  - 計算した情報をもとに `selectedReservation` オブジェクトを作成し、モーダルに渡して表示。
+- **予約データのフロントエンド状態管理:**
+  - モーダルで「保存」がクリックされると、`handleSaveReservation` が呼ばれる。
+  - `reservations` というリアクティブな配列に、新しい予約データを追加または更新。
+  - `drawReservations` 関数が `reservations` 配列の内容を監視し、変更があるたびにキャンバスに予約情報を描画。
+- **サーバーサイド連携 (API通信):**
+  - **予約取得:** コンポーネントのマウント時 (`onMounted`) に `fetchReservations` を実行し、`GET /api/reservations` を呼び出して既存の予約データを取得・描画。
+  - **予約保存:** `handleSaveReservation` 内で `saveReservation` を実行し、`POST /api/reservations` へ新しい予約データを送信してデータベースに保存。
+- **Vite 開発サーバーのプロキシ設定:**
+  - `vite.config.js` に `server.proxy` 設定を追加。
+  - フロントエンド (`http://localhost:5173`) からバックエンド (`http://localhost:3000`) への `/api` および `/socket.io` のリクエストが正しく転送されるように設定し、CORSエラーを回避。
+
+## 3. 手書き予約機能の実装
+- **`ReservationModal.vue` の更新:**
+  - 手書き入力用の `<canvas>` 要素を追加し、描画ロジックを実装。
+  - テキスト入力と手書き入力の切り替え（ラジオボタン）を実装。
+  - キャンバスのクリアボタンを追加。
+  - `editableReservation` に `handwriting` プロパティを追加し、手書きデータのファイル名を保持できるように変更。
+  - `save` メソッドで、手書きデータがある場合は `/api/handwriting` エンドポイントへ PNG 画像をアップロードし、返されたファイル名を予約データに含めるように変更。
+- **`ReservationGrid.vue` の更新:**
+  - `drawReservations` 関数内で、予約データに `handwriting` プロパティが存在する場合、`/api/handwriting/{filename}` から画像を読み込み、キャンバスに描画するロジックを追加。
+- **サーバーサイド (`server/src/index.js`) の更新:**
+  - `/api/handwriting` パスに対して、`data/png` ディレクトリから静的ファイルとして手書き画像を配信する GET エンドポイントを追加。
+- **テストの確認:**
+  - 既存のユニットテストおよび統合テストが引き続き正常にパスすることを確認。
+
+## 現在の状態
+- 予約表のグリッドが表示され、クリックするとテキスト入力または手書き入力が選択できるモーダルが開く。
+- 患者名を入力して保存すると、予約がクライアントの画面に描画され、同時にサーバーのデータベースにも保存される。
+- 手書きで入力して保存すると、手書き画像がサーバーにアップロードされ、そのファイル名が予約データとして保存され、グリッドに手書き画像が表示される。
+- ページをリロードしても、サーバーから予約情報が再取得され、表示が復元される。
+- **テキスト予約と手書き予約の基本的な CRUD (作成・読み取り) 機能が完成。**
+
+## 今後の実装予定
+
+1.  **リアルタイム同期の実装:**
+    - フロントエンドで `socket.io-client` を使用して、サーバーとの WebSocket 接続を確立する。
+    - サーバーサイド (`server/src/index.js`) の API エンドポイント (作成・更新・削除) が呼ばれた際に、`io.emit()` を使って関連するイベント (`newReservation`, `updateReservation`, `deleteReservation`) を全クライアントに通知する。
+    - フロントエンド側でこれらのイベントを待ち受け (`socket.on(...)`)、受け取ったデータに応じて `reservations` 配列を更新し、画面を再描画する。
+    - E2E テスト (Playwright) で、複数ブラウザ（端末）間の同期が 200ms 以内に行われることを検証する。
+
+2.  **予約の編集・削除機能:**
+    - 既存の予約がクリックされた場合に、`ReservationModal.vue` または `HandwritingModal.vue` を開いて編集できるようにする。
+    - `PUT /api/reservations/:id` エンドポイントと連携し、変更を保存する。
+    - モーダルに削除ボタンを追加し、`DELETE /api/reservations/:id` エンドポイントと連携して予約を削除できるようにする。

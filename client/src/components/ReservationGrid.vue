@@ -1,153 +1,260 @@
 <template>
-  <div class="status">
-    接続状態: {{ isConnected ? '接続済み' : '切断' }}
+  <div class="grid-container">
+    <canvas ref="canvas" @mousedown="onMouseDown"></canvas>
   </div>
-  <canvas 
-    ref="reservationCanvas" 
-    @mousedown="startDrawing"
-    @mousemove="draw"
-    @mouseup="stopDrawing"
-    @mouseleave="stopDrawing"
-    class="reservation-canvas"
-  ></canvas>
+  <ReservationModal
+    :show="isModalVisible"
+    :reservation="selectedReservation"
+    @close="isModalVisible = false"
+    @save="handleSaveReservation"
+  />
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
-import { useGridDrawer } from '../composables/useGridDrawer';
-import { useSocket } from '../composables/useSocket';
+import { ref, onMounted, reactive } from 'vue';
+import ReservationModal from './ReservationModal.vue';
 
-const reservationCanvas = ref(null);
-const reservations = ref([]);
-const isDrawing = ref(false);
+const canvas = ref(null);
+const ctx = ref(null);
 
-const { 
-  initializeCanvas, 
-  drawGrid, 
-  getCoordinatesFromMouseEvent,
-  getContext,
-} = useGridDrawer(reservationCanvas, reservations);
+// --- State ---
+const reservations = reactive([]);
+const isModalVisible = ref(false);
+const selectedReservation = ref({});
+const currentDate = ref(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
 
-const { isConnected, on, off, emit } = useSocket();
-
-// --- Socket イベントハンドラ ---
-const handleNewReservation = (newReservation) => {
-  reservations.value.push(newReservation);
-};
-
-const handleInitialReservations = (initialReservations) => {
-  reservations.value = initialReservations;
-};
-
-onMounted(() => {
-  initializeCanvas();
-  drawGrid();
-  
-  on('new-reservation', handleNewReservation);
-  on('initial-reservations', handleInitialReservations);
-  emit('get-initial-reservations');
+// --- Grid Configuration ---
+const config = reactive({
+  columns: 10,
+  startHour: 9,
+  endHour: 18,
+  timeSlotInterval: 15, // in minutes
+  headerHeight: 50,
+  timeColumnWidth: 80,
+  lineColor: '#ccc',
+  lineWidth: 1,
 });
 
-onUnmounted(() => {
-  off('new-reservation', handleNewReservation);
-  off('initial-reservations', handleInitialReservations);
+// --- Derived Properties ---
+const state = reactive({
+  canvasWidth: 0,
+  canvasHeight: 0,
+  cellWidth: 0,
+  cellHeight: 0,
+  totalSlots: 0,
 });
 
-// --- 描画イベントハンドラ ---
-function startDrawing(event) {
-  const ctx = getContext();
-  if (!ctx) return;
+// --- API Functions ---
+const fetchReservations = async () => {
+  try {
+    const response = await fetch(`/api/reservations?date=${currentDate.value}`);
+    if (!response.ok) throw new Error('Failed to fetch reservations');
+    const data = await response.json();
+    reservations.splice(0, reservations.length, ...data); // Replace array content
+    draw();
+  } catch (error) {
+    console.error(error);
+  }
+};
 
-  isDrawing.value = true;
-  const pos = getMousePos(event);
-  
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(pos.x, pos.y);
-}
+const saveReservation = async (reservation) => {
+  try {
+    const response = await fetch('/api/reservations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reservation),
+    });
+    if (!response.ok) throw new Error('Failed to save reservation');
+    const newReservation = await response.json();
+    
+    // Add to local state
+    const index = reservations.findIndex(r => r.id === newReservation.id);
+    if (index !== -1) {
+        reservations[index] = newReservation;
+    } else {
+        reservations.push(newReservation);
+    }
+    
+    draw();
+  } catch (error) {
+    console.error(error);
+  }
+};
 
-function draw(event) {
-  if (!isDrawing.value) return;
-  const ctx = getContext();
-  if (!ctx) return;
 
-  const pos = getMousePos(event);
-  ctx.lineTo(pos.x, pos.y);
-  ctx.stroke();
-}
+// --- Drawing Functions ---
 
-async function stopDrawing(event) {
-  if (!isDrawing.value) return;
-  isDrawing.value = false;
+const drawGrid = () => {
+  if (!ctx.value) return;
+  const context = ctx.value;
 
-  const canvas = reservationCanvas.value;
-  const coords = getCoordinatesFromMouseEvent(event);
+  // Clear canvas
+  context.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
 
-  if (!canvas || !coords) {
-    drawGrid();
-    return;
+  // --- Draw Vertical Lines (Columns) ---
+  for (let i = 0; i <= config.columns; i++) {
+    const x = config.timeColumnWidth + i * state.cellWidth;
+    context.beginPath();
+    context.moveTo(x, config.headerHeight);
+    context.lineTo(x, state.canvasHeight);
+    context.strokeStyle = config.lineColor;
+    context.lineWidth = config.lineWidth;
+    context.stroke();
   }
 
-  canvas.toBlob(async (blob) => {
-    if (!blob) {
-      drawGrid();
-      return;
+  // --- Draw Horizontal Lines (Time Slots) ---
+  for (let i = 0; i <= state.totalSlots; i++) {
+    const y = config.headerHeight + i * state.cellHeight;
+    context.beginPath();
+    context.moveTo(config.timeColumnWidth, y);
+    context.lineTo(state.canvasWidth, y);
+    context.strokeStyle = config.lineColor;
+    context.lineWidth = config.lineWidth;
+    context.stroke();
+  }
+};
+
+const drawHeaders = () => {
+    if (!ctx.value) return;
+    const context = ctx.value;
+    context.font = '14px Arial';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillStyle = '#333';
+
+    // --- Draw Column Headers (e.g., "診察台 1") ---
+    for (let i = 0; i < config.columns; i++) {
+        const x = config.timeColumnWidth + (i + 0.5) * state.cellWidth;
+        const y = config.headerHeight / 2;
+        context.fillText(`診察台 ${i + 1}`, x, y);
     }
 
-    const formData = new FormData();
-    formData.append('handwriting', blob, 'handwriting.png');
+    // --- Draw Time Headers (e.g., "09:00") ---
+    context.textAlign = 'right';
+    for (let i = 0; i <= state.totalSlots; i++) {
+        if (i % (60 / config.timeSlotInterval) === 0) { // Draw hour labels
+            const y = config.headerHeight + i * state.cellHeight;
+            const hour = config.startHour + Math.floor(i * config.timeSlotInterval / 60);
+            
+            context.beginPath();
+            context.moveTo(0, y);
+            context.lineTo(state.canvasWidth, y);
+            context.strokeStyle = '#999'; // Bolder line for hour marks
+            context.lineWidth = 1.5;
+            context.stroke();
 
-    try {
-      const response = await fetch('/api/handwriting', {
-        method: 'POST',
-        body: formData,
-      });
+            context.fillText(`${String(hour).padStart(2, '0')}:00`, config.timeColumnWidth - 10, y);
+        }
+    }
+};
 
-      if (!response.ok) {
-        throw new Error('Upload failed');
-      }
+const drawReservations = () => {
+  if (!ctx.value) return;
+  const context = ctx.value;
 
-      const result = await response.json();
-      
-      const newReservation = {
-        date: new Date().toISOString().split('T')[0],
-        time_min: coords.time_min,
-        column_index: coords.column_index,
-        patient_name: null,
-        handwriting: result.filename,
+  reservations.forEach(res => {
+    const x = config.timeColumnWidth + res.column_index * state.cellWidth;
+    const y = config.headerHeight + ((res.time_min - config.startHour * 60) / config.timeSlotInterval) * state.cellHeight;
+    
+    context.fillStyle = 'rgba(0, 123, 255, 0.8)';
+    context.fillRect(x, y, state.cellWidth, state.cellHeight);
+
+    if (res.patient_name) {
+      context.fillStyle = 'white';
+      context.font = '12px Arial';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
+    } else if (res.handwriting) {
+      const img = new Image();
+      img.onload = () => {
+        context.drawImage(img, x, y, state.cellWidth, state.cellHeight);
       };
-
-      emit('create-reservation', newReservation);
-
-    } catch (error) {
-      console.error('Error uploading handwriting:', error);
-      alert('手書き画像の保存に失敗しました。');
-    } finally {
-      // 予約作成の成否に関わらず、グリッドを再描画して手書きの線を消す
-      drawGrid();
+      img.src = `/api/handwriting/${res.handwriting}`;
     }
-  }, 'image/png');
-}
+  });
+};
 
-function getMousePos(event) {
-  const rect = reservationCanvas.value.getBoundingClientRect();
-  return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
+const setupCanvas = () => {
+  const dpr = window.devicePixelRatio || 1;
+  const parent = canvas.value.parentElement;
+  const rect = parent.getBoundingClientRect();
+
+  state.canvasWidth = rect.width;
+  state.canvasHeight = rect.height;
+
+  canvas.value.width = state.canvasWidth * dpr;
+  canvas.value.height = state.canvasHeight * dpr;
+  
+  ctx.value.scale(dpr, dpr);
+
+  canvas.value.style.width = `${state.canvasWidth}px`;
+  canvas.value.style.height = `${state.canvasHeight}px`;
+
+  // Recalculate derived properties
+  state.totalSlots = ((config.endHour - config.startHour) * 60) / config.timeSlotInterval;
+  state.cellWidth = (state.canvasWidth - config.timeColumnWidth) / config.columns;
+  state.cellHeight = (state.canvasHeight - config.headerHeight) / state.totalSlots;
+  
+  draw();
+};
+
+const draw = () => {
+  requestAnimationFrame(() => {
+    if (!ctx.value) return;
+    ctx.value.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
+    drawGrid();
+    drawHeaders();
+    drawReservations();
+  });
+};
+
+// --- Event Handlers ---
+
+const onMouseDown = (event) => {
+  const rect = canvas.value.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+
+  if (x < config.timeColumnWidth || y < config.headerHeight) return;
+
+  const columnIndex = Math.floor((x - config.timeColumnWidth) / state.cellWidth);
+  const timeSlotIndex = Math.floor((y - config.headerHeight) / state.cellHeight);
+
+  const timeMin = config.startHour * 60 + timeSlotIndex * config.timeSlotInterval;
+
+  selectedReservation.value = {
+    date: currentDate.value,
+    time_min: timeMin,
+    column_index: columnIndex,
+    patient_name: ''
   };
-}
+
+  isModalVisible.value = true;
+};
+
+const handleSaveReservation = (savedReservation) => {
+  saveReservation(savedReservation);
+  isModalVisible.value = false;
+};
+
+// --- Lifecycle ---
+onMounted(() => {
+  ctx.value = canvas.value.getContext('2d');
+  setupCanvas();
+  fetchReservations();
+  window.addEventListener('resize', setupCanvas);
+});
+
 </script>
 
 <style scoped>
-.reservation-canvas {
+.grid-container {
+  width: 100%;
+  height: 80vh; /* Example height */
   border: 1px solid black;
-  cursor: crosshair;
 }
-.status {
-  margin-bottom: 10px;
-  padding: 5px;
-  background-color: #f0f0f0;
-  border: 1px solid #ccc;
+canvas {
+  display: block;
 }
 </style>
