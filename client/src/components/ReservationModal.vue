@@ -61,7 +61,7 @@ const isDrawing = ref(false);
 onMounted(() => {
   if (handwritingCanvas.value) {
     ctx.value = handwritingCanvas.value.getContext('2d');
-    setupCanvas();
+    setupCanvasContextAndDimensions();
   }
 });
 
@@ -70,7 +70,7 @@ watch(() => props.show, (newVal) => {
     editableReservation.value = { ...props.reservation };
     nextTick(() => {
       patientNameInput.value?.focus();
-      setupCanvas(); // Ensure canvas is set up when modal opens
+      setupCanvasContextAndDimensions(); // Ensure canvas is set up when modal opens
       // If there's existing handwriting, load it onto the canvas
       if (editableReservation.value.handwriting) {
         const img = new Image();
@@ -89,27 +89,43 @@ watch(() => props.show, (newVal) => {
   }
 });
 
-const setupCanvas = () => {
-  if (!handwritingCanvas.value) return;
-  const canvas = handwritingCanvas.value;
+const setupCanvasContextAndDimensions = () => {
+  if (!handwritingCanvas.value) return; // キャンバス要素がない場合は処理しない
 
-  // Initialize ctx.value if it's not already set
-  if (!ctx.value) {
+  // ctx.value が null の場合、またはキャンバスが変更された場合に再取得
+  if (!ctx.value || ctx.value.canvas !== handwritingCanvas.value) {
     ctx.value = handwritingCanvas.value.getContext('2d');
+    if (!ctx.value) {
+      console.error('Failed to get 2D context for canvas.');
+      return;
+    }
   }
 
+  const canvas = handwritingCanvas.value;
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
+
+  // Reset transformation matrix to prevent cumulative scaling
+  ctx.value.setTransform(1, 0, 0, 1, 0, 0);
 
   canvas.width = rect.width * dpr;
   canvas.height = rect.height * dpr;
   ctx.value.scale(dpr, dpr);
 
+  // Log canvas dimensions and DPR for debugging
+  console.log('Canvas setup:', {
+    dpr,
+    rectWidth: rect.width,
+    rectHeight: rect.height,
+    canvasWidth: canvas.width,
+    canvasHeight: canvas.height,
+  });
+
+  // Re-apply drawing styles after setting dimensions
   ctx.value.lineWidth = 2;
   ctx.value.lineCap = 'round';
   ctx.value.strokeStyle = 'black';
   ctx.value.fillStyle = 'white';
-  ctx.value.fillRect(0, 0, canvas.width, canvas.height); // Set white background
 };
 
 const getEventPos = (event) => {
@@ -117,8 +133,8 @@ const getEventPos = (event) => {
   const clientX = event.touches ? event.touches[0].clientX : event.clientX;
   const clientY = event.touches ? event.touches[0].clientY : event.clientY;
   return {
-    x: (clientX - rect.left) / (window.devicePixelRatio || 1),
-    y: (clientY - rect.top) / (window.devicePixelRatio || 1),
+    x: (clientX - rect.left),
+    y: (clientY - rect.top),
   };
 };
 
@@ -140,7 +156,9 @@ const draw = (event) => {
 
 const stopDrawing = () => {
   isDrawing.value = false;
-  ctx.value.closePath();
+  if (ctx.value) {
+    ctx.value.closePath();
+  }
 };
 
 const clearCanvas = () => {
@@ -148,6 +166,13 @@ const clearCanvas = () => {
     ctx.value.clearRect(0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
     ctx.value.fillStyle = 'white';
     ctx.value.fillRect(0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height); // Reset white background
+
+    // Re-apply drawing styles after clearing
+    ctx.value.lineWidth = 2;
+    ctx.value.lineCap = 'round';
+    ctx.value.strokeStyle = 'black';
+    ctx.value.fillStyle = 'white';
+    console.log('Canvas cleared and styles reapplied.');
   }
 };
 

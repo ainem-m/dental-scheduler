@@ -1,18 +1,21 @@
 import { ref, watch } from 'vue';
 
-export function useGridDrawer(canvasRef, reservations, config, state) {
-  const ctx = ref(null);
-
+export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
   function getContext() {
     return ctx.value;
   }
 
   function drawGrid() {
-    if (!ctx.value) return;
+    console.log('drawGrid called');
+    if (!ctx.value) {
+      console.log('ctx is null in drawGrid');
+      return;
+    }
     const context = ctx.value;
     const canvas = canvasRef.value;
 
-    context.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
+    console.log('Drawing grid with context:', context);
+    
     context.strokeStyle = config.lineColor;
     context.lineWidth = config.lineWidth;
     context.font = '14px Arial';
@@ -39,20 +42,22 @@ export function useGridDrawer(canvasRef, reservations, config, state) {
     // 描画スタイルを再度手書き用に設定
     context.strokeStyle = '#000';
     context.lineWidth = 2;
-
-    drawReservations();
   }
 
   // 予約を描画する
   const drawReservations = async () => {
+    console.log('drawReservations called', reservations.value);
     const context = ctx.value;
-    if (!context) return;
+    if (!context) {
+      console.log('context is null in drawReservations');
+      return;
+    }
 
     context.font = '12px Arial';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
 
-    const imagePromises = reservations.value.map(res => {
+    const imagePromises = reservations.map(res => {
       const x = config.timeColumnWidth + res.column_index * state.cellWidth;
       const y = config.headerHeight + ((res.time_min - config.startHour * 60) / config.timeSlotInterval) * state.cellHeight;
 
