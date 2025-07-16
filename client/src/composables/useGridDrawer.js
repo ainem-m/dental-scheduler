@@ -46,52 +46,54 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
 
   // 予約を描画する
   const drawReservations = async () => {
-    console.log('drawReservations called', reservations.value);
+    console.log('drawReservations called with:', reservations);
     const context = ctx.value;
     if (!context) {
       console.log('context is null in drawReservations');
       return;
     }
 
-    context.font = '12px Arial';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-
     const imagePromises = reservations.map(res => {
-      const x = config.timeColumnWidth + res.column_index * state.cellWidth;
-      const y = config.headerHeight + ((res.time_min - config.startHour * 60) / config.timeSlotInterval) * state.cellHeight;
+      return new Promise(async (resolve) => {
+        const x = config.timeColumnWidth + res.column_index * state.cellWidth;
+        const y = config.headerHeight + ((res.time_min - config.startHour * 60) / config.timeSlotInterval) * state.cellHeight;
 
-      if (res.handwriting) {
-        return new Promise((resolve) => {
-          const img = new Image();
-          img.onload = () => {
-            context.fillStyle = 'rgba(0, 123, 255, 0.8)';
-            context.fillRect(x, y, state.cellWidth, state.cellHeight);
-            context.drawImage(img, x, y, state.cellWidth, state.cellHeight);
-
-            if (res.patient_name) {
-              context.fillStyle = 'white';
-              context.font = '12px Arial';
-              context.textAlign = 'center';
-              context.textBaseline = 'middle';
-              context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
-            }
-            resolve();
-          };
-          img.onerror = () => {
-            console.error(`画像の読み込みに失敗: ${res.handwriting}`);
-            resolve(); // エラー時もPromiseを解決
-          };
-          img.src = `/api/handwriting/${res.handwriting}`;
-        });
-      } else if (res.patient_name) {
+        // 1. Draw background
         context.fillStyle = 'rgba(0, 123, 255, 0.8)';
         context.fillRect(x, y, state.cellWidth, state.cellHeight);
-        context.fillStyle = 'white';
-        context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
-        return Promise.resolve();
-      }
-      return Promise.resolve();
+
+        // 2. Draw handwriting if it exists
+        if (res.handwriting) {
+          try {
+            const img = new Image();
+            await new Promise((imgResolve, imgReject) => {
+              img.onload = imgResolve;
+              img.onerror = () => {
+                console.error(`画像の読み込みに失敗: ${res.handwriting}`);
+                imgReject(); // Reject on error
+              };
+              img.src = `/api/handwriting/${res.handwriting}`;
+            });
+            context.drawImage(img, x, y, state.cellWidth, state.cellHeight);
+          } catch (error) {
+            // Continue even if image fails to load
+          }
+        }
+
+        // 3. Draw patient name on top
+        if (res.patient_name) {
+          context.textAlign = 'center';
+          context.textBaseline = 'middle';
+          context.font = 'bold 14px Arial';
+          context.strokeStyle = 'black'; // Black stroke for contrast
+          context.lineWidth = 3;
+          context.strokeText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
+          context.fillStyle = 'white'; // White fill
+          context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
+        }
+        
+        resolve();
+      });
     });
 
     await Promise.all(imagePromises);
