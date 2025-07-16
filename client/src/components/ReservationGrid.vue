@@ -13,6 +13,7 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue';
 import ReservationModal from './ReservationModal.vue';
+import { useGridDrawer } from '../composables/useGridDrawer';
 
 const canvas = ref(null);
 const ctx = ref(null);
@@ -43,6 +44,9 @@ const state = reactive({
   cellHeight: 0,
   totalSlots: 0,
 });
+
+// --- useGridDrawer から関数をインポート ---
+const { drawGrid, drawReservations, getCoordinatesFromMouseEvent } = useGridDrawer(canvas, reservations, config, state);
 
 // --- API Functions ---
 const fetchReservations = async () => {
@@ -84,36 +88,6 @@ const saveReservation = async (reservation) => {
 
 // --- Drawing Functions ---
 
-const drawGrid = () => {
-  if (!ctx.value) return;
-  const context = ctx.value;
-
-  // Clear canvas
-  context.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
-
-  // --- Draw Vertical Lines (Columns) ---
-  for (let i = 0; i <= config.columns; i++) {
-    const x = config.timeColumnWidth + i * state.cellWidth;
-    context.beginPath();
-    context.moveTo(x, config.headerHeight);
-    context.lineTo(x, state.canvasHeight);
-    context.strokeStyle = config.lineColor;
-    context.lineWidth = config.lineWidth;
-    context.stroke();
-  }
-
-  // --- Draw Horizontal Lines (Time Slots) ---
-  for (let i = 0; i <= state.totalSlots; i++) {
-    const y = config.headerHeight + i * state.cellHeight;
-    context.beginPath();
-    context.moveTo(config.timeColumnWidth, y);
-    context.lineTo(state.canvasWidth, y);
-    context.strokeStyle = config.lineColor;
-    context.lineWidth = config.lineWidth;
-    context.stroke();
-  }
-};
-
 const drawHeaders = () => {
     if (!ctx.value) return;
     const context = ctx.value;
@@ -148,41 +122,6 @@ const drawHeaders = () => {
     }
 };
 
-const drawReservations = () => {
-  if (!ctx.value) return;
-  const context = ctx.value;
-
-  reservations.forEach(res => {
-    const x = config.timeColumnWidth + res.column_index * state.cellWidth;
-    const y = config.headerHeight + ((res.time_min - config.startHour * 60) / config.timeSlotInterval) * state.cellHeight;
-    
-    context.fillStyle = 'rgba(0, 123, 255, 0.8)';
-    context.fillRect(x, y, state.cellWidth, state.cellHeight);
-
-    if (res.handwriting) {
-      const img = new Image();
-      img.onload = () => {
-        context.drawImage(img, x, y, state.cellWidth, state.cellHeight);
-        // If patient name also exists, draw it on top of the image
-        if (res.patient_name) {
-          context.fillStyle = 'white'; // Or a contrasting color
-          context.font = '12px Arial';
-          context.textAlign = 'center';
-          context.textBaseline = 'middle';
-          context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
-        }
-      };
-      img.src = `/api/handwriting/${res.handwriting}`;
-    } else if (res.patient_name) {
-      context.fillStyle = 'white';
-      context.font = '12px Arial';
-      context.textAlign = 'center';
-      context.textBaseline = 'middle';
-      context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
-    }
-  });
-};
-
 const setupCanvas = () => {
   const dpr = window.devicePixelRatio || 1;
   const parent = canvas.value.parentElement;
@@ -207,34 +146,26 @@ const setupCanvas = () => {
   draw();
 };
 
-const draw = () => {
-  requestAnimationFrame(() => {
+const draw = async () => {
+  requestAnimationFrame(async () => {
     if (!ctx.value) return;
     ctx.value.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
-    drawGrid();
+    drawGrid(); // useGridDrawer からの drawGrid を呼び出す
     drawHeaders();
-    drawReservations();
+    await drawReservations();
   });
 };
 
 // --- Event Handlers ---
 
 const onMouseDown = (event) => {
-  const rect = canvas.value.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
-
-  if (x < config.timeColumnWidth || y < config.headerHeight) return;
-
-  const columnIndex = Math.floor((x - config.timeColumnWidth) / state.cellWidth);
-  const timeSlotIndex = Math.floor((y - config.headerHeight) / state.cellHeight);
-
-  const timeMin = config.startHour * 60 + timeSlotIndex * config.timeSlotInterval;
+  const coordinates = getCoordinatesFromMouseEvent(event);
+  if (!coordinates) return;
 
   selectedReservation.value = {
     date: currentDate.value,
-    time_min: timeMin,
-    column_index: columnIndex,
+    time_min: coordinates.time_min,
+    column_index: coordinates.column_index,
     patient_name: ''
   };
 

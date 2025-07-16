@@ -1,38 +1,10 @@
 import { ref, watch } from 'vue';
 
-export function useGridDrawer(canvasRef, reservations) {
+export function useGridDrawer(canvasRef, reservations, config, state) {
   const ctx = ref(null);
-
-  // --- 定数 ---
-  const COLUMNS = 10;
-  const START_HOUR = 9;
-  const END_HOUR = 18;
-  const ROW_HEIGHT = 20;
-  const HEADER_HEIGHT = 30;
-  const COLUMN_WIDTH = 100;
-  const TIME_MARKER_WIDTH = 60;
 
   function getContext() {
     return ctx.value;
-  }
-
-  function initializeCanvas() {
-    const canvas = canvasRef.value;
-    if (!canvas) return;
-    const context = canvas.getContext('2d');
-    ctx.value = context;
-    
-    const totalMinutes = (END_HOUR - START_HOUR) * 60;
-    const totalRows = totalMinutes / 5;
-
-    canvas.width = TIME_MARKER_WIDTH + COLUMNS * COLUMN_WIDTH;
-    canvas.height = HEADER_HEIGHT + totalRows * ROW_HEIGHT;
-
-    // 描画スタイルの設定
-    context.lineCap = 'round';
-    context.lineJoin = 'round';
-    context.lineWidth = 2;
-    context.strokeStyle = '#000'; // 手書き線の色
   }
 
   function drawGrid() {
@@ -40,41 +12,28 @@ export function useGridDrawer(canvasRef, reservations) {
     const context = ctx.value;
     const canvas = canvasRef.value;
 
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.strokeStyle = '#e0e0e0'; // グリッド線の色
-    context.lineWidth = 1; // グリッド線の太さ
-    context.font = '12px sans-serif';
+    context.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
+    context.strokeStyle = config.lineColor;
+    context.lineWidth = config.lineWidth;
+    context.font = '14px Arial';
     context.fillStyle = '#333';
 
-    const totalMinutes = (END_HOUR - START_HOUR) * 60;
-    const totalRows = totalMinutes / 5;
-
-    // 列ヘッダーと垂直線
-    for (let i = 0; i <= COLUMNS; i++) {
-      const x = TIME_MARKER_WIDTH + i * COLUMN_WIDTH;
+    // Draw Vertical Lines (Columns)
+    for (let i = 0; i <= config.columns; i++) {
+      const x = config.timeColumnWidth + i * state.cellWidth;
       context.beginPath();
-      context.moveTo(x, 0);
-      context.lineTo(x, canvas.height);
+      context.moveTo(x, config.headerHeight);
+      context.lineTo(x, state.canvasHeight);
       context.stroke();
-      if (i < COLUMNS) {
-        context.fillText(`列 ${i + 1}`, x + 10, HEADER_HEIGHT - 10);
-      }
     }
 
-    // 時間マーカーと水平線
-    for (let i = 0; i <= totalRows; i++) {
-      const y = HEADER_HEIGHT + i * ROW_HEIGHT;
+    // Draw Horizontal Lines (Time Slots)
+    for (let i = 0; i <= state.totalSlots; i++) {
+      const y = config.headerHeight + i * state.cellHeight;
       context.beginPath();
-      context.moveTo(0, y);
-      context.lineTo(canvas.width, y);
+      context.moveTo(config.timeColumnWidth, y);
+      context.lineTo(state.canvasWidth, y);
       context.stroke();
-      if (i % 3 === 0) {
-        const minutes = i * 5;
-        const hour = START_HOUR + Math.floor(minutes / 60);
-        const minute = minutes % 60;
-        const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-        context.fillText(timeString, 5, y - 5);
-      }
     }
     
     // 描画スタイルを再度手書き用に設定
@@ -85,35 +44,52 @@ export function useGridDrawer(canvasRef, reservations) {
   }
 
   // 予約を描画する
-  function drawReservations() {
+  const drawReservations = async () => {
     const context = ctx.value;
     if (!context) return;
 
-    context.font = '14px sans-serif';
+    context.font = '12px Arial';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
 
-    reservations.value.forEach(res => {
-      const cellX = TIME_MARKER_WIDTH + res.column_index * COLUMN_WIDTH;
-      const cellY = HEADER_HEIGHT + ((res.time_min - START_HOUR * 60) / 5) * ROW_HEIGHT;
-      
-      if (res.patient_name) {
-        context.fillStyle = '#2563eb'; // 青色
-        const textX = cellX + COLUMN_WIDTH / 2;
-        const textY = cellY + ROW_HEIGHT / 2;
-        context.fillText(res.patient_name, textX, textY);
-      } else if (res.handwriting) {
-        const img = new Image();
-        img.onload = () => {
-          // 画像をセルのサイズに合わせて描画
-          context.drawImage(img, cellX, cellY, COLUMN_WIDTH, ROW_HEIGHT);
-        };
-        img.onerror = () => {
-          console.error(`画像の読み込みに失敗: ${res.handwriting}`);
-        };
-        img.src = `/png/${res.handwriting}`;
+    const imagePromises = reservations.value.map(res => {
+      const x = config.timeColumnWidth + res.column_index * state.cellWidth;
+      const y = config.headerHeight + ((res.time_min - config.startHour * 60) / config.timeSlotInterval) * state.cellHeight;
+
+      if (res.handwriting) {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+            context.fillStyle = 'rgba(0, 123, 255, 0.8)';
+            context.fillRect(x, y, state.cellWidth, state.cellHeight);
+            context.drawImage(img, x, y, state.cellWidth, state.cellHeight);
+
+            if (res.patient_name) {
+              context.fillStyle = 'white';
+              context.font = '12px Arial';
+              context.textAlign = 'center';
+              context.textBaseline = 'middle';
+              context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
+            }
+            resolve();
+          };
+          img.onerror = () => {
+            console.error(`画像の読み込みに失敗: ${res.handwriting}`);
+            resolve(); // エラー時もPromiseを解決
+          };
+          img.src = `/api/handwriting/${res.handwriting}`;
+        });
+      } else if (res.patient_name) {
+        context.fillStyle = 'rgba(0, 123, 255, 0.8)';
+        context.fillRect(x, y, state.cellWidth, state.cellHeight);
+        context.fillStyle = 'white';
+        context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight / 2);
+        return Promise.resolve();
       }
+      return Promise.resolve();
     });
+
+    await Promise.all(imagePromises);
   }
   
   function getCoordinatesFromMouseEvent(event) {
@@ -124,14 +100,15 @@ export function useGridDrawer(canvasRef, reservations) {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
-    if (x < TIME_MARKER_WIDTH || y < HEADER_HEIGHT) {
+    if (x < config.timeColumnWidth || y < config.headerHeight) {
       return null;
     }
 
-    const columnIndex = Math.floor((x - TIME_MARKER_WIDTH) / COLUMN_WIDTH);
-    const timeInMinutes = START_HOUR * 60 + Math.floor((y - HEADER_HEIGHT) / ROW_HEIGHT) * 5;
+    const columnIndex = Math.floor((x - config.timeColumnWidth) / state.cellWidth);
+    const timeSlotIndex = Math.floor((y - config.headerHeight) / state.cellHeight);
+    const timeInMinutes = config.startHour * 60 + timeSlotIndex * config.timeSlotInterval;
     
-    if (columnIndex >= 0 && columnIndex < COLUMNS) {
+    if (columnIndex >= 0 && columnIndex < config.columns) {
       return {
         column_index: columnIndex,
         time_min: timeInMinutes,
@@ -143,8 +120,8 @@ export function useGridDrawer(canvasRef, reservations) {
   watch(reservations, drawGrid, { deep: true });
 
   return {
-    initializeCanvas,
     drawGrid,
+    drawReservations,
     getCoordinatesFromMouseEvent,
     getContext, // エクスポートする
   };

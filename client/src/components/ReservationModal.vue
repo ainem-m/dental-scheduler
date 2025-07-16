@@ -92,6 +92,12 @@ watch(() => props.show, (newVal) => {
 const setupCanvas = () => {
   if (!handwritingCanvas.value) return;
   const canvas = handwritingCanvas.value;
+
+  // Initialize ctx.value if it's not already set
+  if (!ctx.value) {
+    ctx.value = handwritingCanvas.value.getContext('2d');
+  }
+
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
 
