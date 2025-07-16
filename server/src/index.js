@@ -297,9 +297,78 @@ app.delete('/api/users/:id', authorize('admin'), async (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  console.log('a user connected');
+  console.log(`a user connected: ${socket.id}`);
+
+  // Join a room based on the date
+  socket.on('join-date-room', (date) => {
+    // Leave previous room if any
+    if (socket.currentRoom) {
+      socket.leave(socket.currentRoom);
+    }
+    socket.join(date);
+    socket.currentRoom = date;
+    console.log(`Socket ${socket.id} joined room ${date}`);
+  });
+
+  socket.on('fetch-reservations', async (date) => {
+    try {
+      const reservations = await db('reservations').where({ date }).select('*');
+      socket.emit('reservations-updated', reservations);
+    } catch (err) {
+      console.error(`Error fetching reservations for date ${date}:`, err);
+      // Optionally, emit an error to the client
+      socket.emit('error', { message: 'Failed to fetch reservations.' });
+    }
+  });
+
+  socket.on('save-reservation', async (reservation) => {
+    try {
+      let savedReservation;
+      if (reservation.id) {
+        // Update existing reservation
+        await db('reservations').where({ id: reservation.id }).update({
+          ...reservation,
+          updated_at: db.fn.now(),
+        });
+        savedReservation = await db('reservations').where({ id: reservation.id }).first();
+      } else {
+        // Create new reservation
+        const [id] = await db('reservations').insert(reservation);
+        savedReservation = await db('reservations').where({ id }).first();
+      }
+      
+      // Notify all clients in the same date room
+      const reservationsForDate = await db('reservations').where({ date: savedReservation.date }).select('*');
+      io.to(savedReservation.date).emit('reservations-updated', reservationsForDate);
+
+    } catch (err) {
+      console.error('Error saving reservation:', err);
+      socket.emit('error', { message: 'Failed to save reservation.' });
+    }
+  });
+
+  socket.on('delete-reservation', async (id) => {
+    try {
+      const reservationToDelete = await db('reservations').where({ id }).first();
+      if (!reservationToDelete) {
+        socket.emit('error', { message: 'Reservation not found.' });
+        return;
+      }
+      
+      await db('reservations').where({ id }).del();
+      
+      // Notify all clients in the same date room
+      const reservationsForDate = await db('reservations').where({ date: reservationToDelete.date }).select('*');
+      io.to(reservationToDelete.date).emit('reservations-updated', reservationsForDate);
+
+    } catch (err) {
+      console.error('Error deleting reservation:', err);
+      socket.emit('error', { message: 'Failed to delete reservation.' });
+    }
+  });
+
   socket.on('disconnect', () => {
-    console.log('user disconnected');
+    console.log(`user disconnected: ${socket.id}`);
   });
 });
 

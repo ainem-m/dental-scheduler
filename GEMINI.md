@@ -10,6 +10,8 @@ Author: ChatGPT (based on user discussions)
 	•	iPad 複数台 (Safari) から同時アクセス可能。
 	•	Apple Pencil 手書き または テキスト入力で予約を登録。
 	•	日単位で予約表を管理し、可変列 × 可変時間枠 (例: 10 列 × 5 分刻み) に対応。
+	•	**日付指定機能**: カレンダーや「前日/翌日」ボタンで表示する日付を切り替えられる。URL に日付を反映 (`/reservations/YYYY-MM-DD`)。
+	•	**休日設定機能**: 特定の日付や曜日を休日として設定し、予約画面で分かりやすく表示する。
 	•	すべての端末間で 200 ms 以内にリアルタイム同期。
 	•	TDD (ユニット / 統合 / E2E) で開発・保守。
 
@@ -18,7 +20,7 @@ Author: ChatGPT (based on user discussions)
 💻 技術スタック概要
 
 レイヤ	採用技術	理由
-フロントエンド	Vue 3 (Composition API) + ViteCanvas: HTML5 <canvas>	iPad/Safari で高パフォーマンス。
+フロントエンド	Vue 3 (Composition API) + Vite, **Vue Router**Canvas: HTML5 <canvas>	iPad/Safari で高パフォーマンス。URL連動の日付管理。
 サーバ/API	Node.js 20 + Express 5	軽量・JavaScript 統一言語。
 双方向通信	Socket.IO (WebSocket)	<200 ms のリアルタイム同期。
 データ永続化	SQLite 3 via Knex.js (better-sqlite3)	LAN 単体で運用・簡易バックアップ。
@@ -32,7 +34,7 @@ Author: ChatGPT (based on user discussions)
 
 📐 アーキテクチャ図 (概要)
 
-┌───────────┐     WebSocket + REST     ┌─────────────┐  WAL
+┌───────────┐     WebSocket + REST     ┌───────────���─┐  WAL
 │ iPad A    │ ───────────────────────► │  Node/Express│ ──► SQLite
 │ (Vue App) │ ◄─────────────────────── │  Socket.IO   │
 └───────────┘     (≤200 ms Sync)       └─────────────┘   ▲
@@ -42,6 +44,12 @@ Author: ChatGPT (based on user discussions)
 ┌───────────┐
 │ iPad B    │   同期   (Playwright でマルチコンテキスト E2E テスト)
 └───────────┘
+
+**API エンドポイント (主要なもの)**
+*   `GET /api/reservations?date=YYYY-MM-DD`: 指定日の予約を取得
+*   `GET /api/holidays`: 全ての休日設定を取得
+*   `POST /api/reservations`: 予約の新規作成・更新
+*   `DELETE /api/reservations/:id`: 予約の削除
 
 
 ⸻
@@ -68,6 +76,15 @@ CREATE TABLE users (
   role          TEXT DEFAULT 'staff'       -- 'admin' も想定
 );
 
+-- 休日テーブル
+CREATE TABLE holidays (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  type        TEXT    NOT NULL, -- 'SPECIFIC_DATE' or 'RECURRING_DAY'
+  date        TEXT,             -- '2025-08-13' (SPECIFIC_DATEの場合)
+  day_of_week INTEGER,          -- 0-6 (日-土) (RECURRING_DAYの場合)
+  name        TEXT              -- '夏季休業', '定休日'など
+);
+
 マイグレーション: Knex.js を使用し npm run migrate / rollback。
 
 ⸻
@@ -79,7 +96,7 @@ CREATE TABLE users (
 
 Roles:
 	•	staff: 予約 CRUD。
-	•	admin: ユーザー管理 & ログ閲覧。
+	•	admin: ユーザー管理 & ログ閲覧、**休日設定**。
 
 ⸻
 
@@ -228,6 +245,7 @@ test('予約の削除が複数端末で同期される', async ({ browser }) => 
 ├── client/
 │   ├── src/
 │   │   ├── components/
+│   │   ├── router/         # Vue Router
 │   │   └── store/
 │   └── tests/            # Vue ユニット
 ├── server/

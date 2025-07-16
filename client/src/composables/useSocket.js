@@ -1,7 +1,9 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import io from 'socket.io-client';
 
-const socket = io('http://localhost:3000'); // TODO: Make URL configurable
+// Use environment variable for the socket server URL, with a fallback
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000';
+const socket = io(SOCKET_URL);
 
 export function useSocket() {
   const isConnected = ref(socket.connected);
@@ -16,6 +18,10 @@ export function useSocket() {
 
   function emit(event, ...args) {
     socket.emit(event, ...args);
+  }
+
+  function joinDateRoom(date) {
+    emit('join-date-room', date);
   }
 
   const handleConnect = () => {
@@ -34,7 +40,6 @@ export function useSocket() {
   onUnmounted(() => {
     socket.off('connect', handleConnect);
     socket.off('disconnect', handleDisconnect);
-    // Consider if socket.disconnect() is needed here
   });
 
   return {
@@ -42,5 +47,6 @@ export function useSocket() {
     on,
     off,
     emit,
+    joinDateRoom, // Expose the new function
   };
 }

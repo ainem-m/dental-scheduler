@@ -12,10 +12,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, onUnmounted } from 'vue';
+import { ref, onMounted, reactive, onUnmounted, watch } from 'vue';
 import ReservationModal from './ReservationModal.vue';
 import { useGridDrawer } from '../composables/useGridDrawer';
 import { useSocket } from '../composables/useSocket';
+
+const props = defineProps({
+  date: {
+    type: String,
+    required: true,
+  },
+});
 
 const canvas = ref(null);
 const ctx = ref(null);
@@ -24,7 +31,7 @@ const ctx = ref(null);
 const reservations = reactive([]);
 const isModalVisible = ref(false);
 const selectedReservation = ref({});
-const currentDate = ref(new Date().toISOString().slice(0, 10)); // YYYY-MM-DD
+const currentDate = ref(props.date);
 
 // --- Grid Configuration ---
 const config = reactive({
@@ -50,13 +57,16 @@ const state = reactive({
 
 // --- useGridDrawer から関数をインポート ---
 const { drawGrid, drawReservations, getCoordinatesFromMouseEvent } = useGridDrawer(canvas, reservations, config, state, ctx);
-const { on, off, emit } = useSocket();
+const { on, off, emit, joinDateRoom } = useSocket();
 
-// --- Socket.IO Functions ---
-const fetchReservations = () => {
-  emit('fetch-reservations', currentDate.value);
+// --- Data Fetching ---
+const fetchDataForDate = (date) => {
+  currentDate.value = date;
+  joinDateRoom(date); // Join the room for the new date
+  emit('fetch-reservations', date);
 };
 
+// --- Socket.IO Functions ---
 const saveReservation = (reservation) => {
   emit('save-reservation', reservation);
 };
@@ -69,8 +79,9 @@ const deleteReservation = (id) => {
 onMounted(() => {
   on('reservations-updated', (updatedReservations) => {
     console.log('reservations-updated received:', updatedReservations);
-    reservations.splice(0, reservations.length, ...updatedReservations);
-    drawReservations();
+    // Ensure we only show reservations for the currently viewed date
+    const filteredReservations = updatedReservations.filter(r => r.date === currentDate.value);
+    reservations.splice(0, reservations.length, ...filteredReservations);
     draw();
   });
 });
@@ -142,17 +153,13 @@ const setupCanvas = () => {
   draw();
 };
 
-const draw = async () => {
-  requestAnimationFrame(async () => {
-    console.log('draw function called');
-    if (!ctx.value) {
-      console.log('ctx is null in draw function');
-      return;
-    }
+const draw = () => {
+  requestAnimationFrame(() => {
+    if (!ctx.value) return;
     ctx.value.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
-    drawGrid(); // useGridDrawer からの drawGrid を呼び出す
+    drawGrid();
     drawHeaders();
-    await drawReservations();
+    drawReservations();
   });
 };
 
@@ -162,15 +169,13 @@ const onMouseDown = (event) => {
   const coordinates = getCoordinatesFromMouseEvent(event);
   if (!coordinates) return;
 
-  // Check if there's an existing reservation at these coordinates
   const existingReservation = reservations.find(res =>
-    res.date === currentDate.value &&
     res.time_min === coordinates.time_min &&
     res.column_index === coordinates.column_index
   );
 
   if (existingReservation) {
-    selectedReservation.value = { ...existingReservation }; // Populate with existing data
+    selectedReservation.value = { ...existingReservation };
   } else {
     selectedReservation.value = {
       date: currentDate.value,
@@ -181,7 +186,6 @@ const onMouseDown = (event) => {
   }
 
   isModalVisible.value = true;
-  console.log('isModalVisible set to true', isModalVisible.value);
 };
 
 const handleSaveReservation = (savedReservation) => {
@@ -194,12 +198,20 @@ const handleDeleteReservation = (id) => {
   isModalVisible.value = false;
 };
 
-// --- Lifecycle ---
+// --- Lifecycle & Watchers ---
+watch(() => props.date, (newDate) => {
+  fetchDataForDate(newDate);
+}, { immediate: true });
+
+
 onMounted(() => {
   ctx.value = canvas.value.getContext('2d');
   setupCanvas();
-  fetchReservations();
   window.addEventListener('resize', setupCanvas);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', setupCanvas);
 });
 
 </script>
