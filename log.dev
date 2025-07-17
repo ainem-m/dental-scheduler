@@ -57,3 +57,37 @@
 [dev] 12:50:21 [vite] hmr update /src/components/ReservationModal.vue
 [dev] 12:50:25 [vite] hmr update /src/components/ReservationModal.vue
 [dev] 12:50:28 [vite] hmr update /src/components/ReservationGrid.vue
+[start] a user connected
+[dev] 12:57:47 [vite] hmr update /src/components/ReservationGrid.vue
+[start] user disconnected
+[start] newReservation.patient_name: 
+[start] newReservation.patient_name: くｙい
+[dev] 13:32:13 [vite] hmr update /src/components/ReservationGrid.vue
+[dev] 13:32:17 [vite] hmr update /src/components/ReservationGrid.vue
+[dev] 13:32:24 [vite] hmr update /src/components/ReservationGrid.vue
+[start] a user connected
+[start] user disconnected
+[start] a user connected
+[start] user disconnected
+[dev] 13:34:17 [vite] ✨ new dependencies optimized: socket.io-client
+[dev] 13:34:17 [vite] ✨ optimized dependencies changed. reloading
+[start] a user connected
+[start] user disconnected
+[start] a user connected
+[start] user disconnected
+[start] a user connected
+[start] user disconnected
+[start] a user connected
+[start] user disconnected
+[start] a user connected
+[start] user disconnected
+[start] a user connected
+[start] user disconnected
+[start] a user connected
+[start] user disconnected
+[start] a user connected
+[start] user disconnected
+[start] SIGTERM received, closing server...
+[start] Server closed.
+[start] npm run start exited with code 0
+[dev] npm run dev exited with code 0
