@@ -246,3 +246,43 @@
   - アプリケーションが正常に起動し、基本的な動作が可能であることを確認。
 - **次のステップ:**
   - これより、ユーザーの指示に基づき、新機能開発、リファクタリング、またはバグ修正に着手する準備が完了。
+
+## 13. Vue Router の問題解決 (2025-07-17)
+
+- **問題の特定:**
+  - 前の担当者が残した `git diff` から、Vue Router が期待通りに動作せず、コンポーネントが描画されない問題が発生していたと推測。
+  - 原因切り分けのため、`main.js` でルーターが無効化され、`router/index.js` もデバッグ用の設定に変更されていた。
+
+- **修正内容:**
+  1.  **`client/src/main.js` の復元:**
+      - ルーターを無効化していた処理を削除。
+      - `createApp(App).use(router).mount('#app')` の標準的な形式に戻し、Vue Router を再度有効化。
+  2.  **`client/src/router/index.js` の復元:**
+      - デバッグ用のダミールートとコンソールログをすべて削除。
+      - `history` モードを `createWebHashHistory` から `createWebHistory` に戻す。
+      - ルート設定を、設計書通り `/reservations/:date` で `ReservationGrid.vue` を表示するように修正。
+  3.  **`client/src/App.vue` のクリーンアップ:**
+      - ルーターの動作確認のために追加されていたデバッグ用の静的コンテンツとコンソールログを削除。
+      - `<router-view>` に渡されていた不要な props を削除し、シンプルな `<router-view />` に戻した。
+
+- **結果:**
+  - 上記の修正により、Vue Router が正常に機能するようになった。
+  - URL (`/reservations/YYYY-MM-DD`) に応じて、適切な日付の予約表データが表示される状態に復旧した。
+
+## 14. 初期データ取得のバグ修正 (2025-07-17)
+
+- **問題の特定:**
+  - ページ初回読み込み時に、データベースに保存されている既存の予約が描画されないバグを発見。
+  - 新しい予約を追加したタイミングで初めて、すべての予約が描画されていた。
+  - 原因は、`ReservationGrid.vue` コンポーネントのマウント時 (`onMounted`) に、初期データを取得するための `fetch-reservations` イベントがサーバーに送信されていなかったため。
+
+- **修正内容:**
+  1.  **`client/src/composables/useSocket.js` の修正:**
+      - `fetchDataForDate` 関数内で、`emit` の代わりに `socketEmit` を使用して `fetch-reservations` イベントを送信するように修正。
+  2.  **`client/src/components/ReservationGrid.vue` の修正:**
+      - `onMounted` ライフサイクルフック内に `fetchDataForDate(props.date)` の呼び出しを追加。
+      - これにより、コンポーネントがマウントされると同時に、現在の日付に対応する予約データをサーバーに要求するようになった。
+
+- **結果:**
+  - ページをリロードした際に、最初からすべての予約情報が正しく表示されるようになった。
+  - アプリケーションの初期表示に関するバグが解消された。

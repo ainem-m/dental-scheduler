@@ -82,7 +82,7 @@ const { on, off, socketEmit, joinDateRoom } = useSocket();
 const fetchDataForDate = (date) => {
   currentDate.value = date;
   joinDateRoom(date); // Join the room for the new date
-  emit('fetch-reservations', date);
+  socketEmit('fetch-reservations', date);
 };
 
 // --- Socket.IO Functions ---
@@ -251,6 +251,9 @@ onMounted(() => {
   // Setup socket listeners
   setupSocketListeners();
   console.log('Socket listeners set up');
+
+  // Fetch initial data
+  fetchDataForDate(props.date);
   
   // Setup canvas and drawing
   setupCanvas();
