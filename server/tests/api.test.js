@@ -207,6 +207,8 @@ describe('Socket.IO Reservation Events', () => {
       });
     });
 
+    // Join the room for the specific date before saving
+    clientSocket.emit('join-date-room', newReservation.date);
     clientSocket.emit('save-reservation', newReservation);
     await reservationsUpdatedPromise;
 
@@ -260,6 +262,8 @@ describe('Socket.IO Reservation Events', () => {
       });
     });
 
+    // Join the room for the specific date before deleting
+    clientSocket.emit('join-date-room', '2025-07-18');
     clientSocket.emit('delete-reservation', id);
     await reservationsUpdatedPromise;
 

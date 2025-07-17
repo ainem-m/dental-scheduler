@@ -100,7 +100,8 @@ watch(() => props.show, (newVal) => {
           img.onload = () => {
             if (ctx.value && handwritingCanvas.value) {
               ctx.value.clearRect(0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
-              ctx.value.drawImage(img, 0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
+              // 元の画像のサイズで描画するために、幅と高さを指定しない
+              ctx.value.drawImage(img, 0, 0);
             }
           };
           img.onerror = () => {
