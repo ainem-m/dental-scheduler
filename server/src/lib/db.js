@@ -1,6 +1,6 @@
 const knex = require('knex');
 const path = require('path');
-const knexConfig = require(path.join(__dirname, '..', '..', 'knexfile.js'));
+const knexConfig = require(path.resolve(__dirname, '..', '..', '..', 'knexfile.js'));
 
 // In a real app, you would use an environment variable to select the config.
 const environment = process.env.NODE_ENV || 'development';
