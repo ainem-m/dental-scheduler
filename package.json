@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test:client": "vitest run -c vitest.config.js",
     "test:server": "vitest run -c vitest.config.server.js server/tests",
-    "test": "npm run test:client && npm run test:server",
+    "test": "npm run test:client && npm run build:server && npm run test:server",
     "test:docker": "docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm app npm test",
     "test:e2e": "playwright test",
     "migrate": "knex migrate:latest",

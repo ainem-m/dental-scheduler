@@ -23,8 +23,13 @@ export interface Reservation extends BaseEntity {
   handwriting?: string; // PNG filename
 }
 
+export enum HolidayType {
+  SPECIFIC_DATE = 'SPECIFIC_DATE',
+  RECURRING_DAY = 'RECURRING_DAY',
+}
+
 export interface Holiday extends BaseEntity {
-  type: 'SPECIFIC_DATE' | 'RECURRING_DAY';
+  type: HolidayType;
   date?: string; // 'YYYY-MM-DD' for SPECIFIC_DATE
   day_of_week?: number; // 0-6 (Sun-Sat) for RECURRING_DAY
   name?: string; // Display name like '夏季休業', '定休日'

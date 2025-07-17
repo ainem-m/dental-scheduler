@@ -1,11 +1,11 @@
 "use strict";
 const request = require('supertest');
-const indexModule = require('../src/index');
+const indexModule = require('../dist/index');
 const app = indexModule.app;
 const server = indexModule.server;
 const io = indexModule.io;
 const startServer = indexModule.startServer;
-const { db } = require('../src/lib');
+const { db } = require('../dist/lib');
 const bcrypt = require('bcrypt');
 const { io: Client } = require('socket.io-client');
 const fs = require('fs');

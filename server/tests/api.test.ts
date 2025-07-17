@@ -1,10 +1,10 @@
 const request = require('supertest');
-const indexModule = require('../src/index');
+const indexModule = require('../dist/index');
 const app = indexModule.app;
 const server = indexModule.server;
 const io = indexModule.io;
 const startServer = indexModule.startServer;
-const { db } = require('../src/lib');
+const { db } = require('../dist/lib');
 const bcrypt = require('bcrypt');
 const { io: Client } = require('socket.io-client');
 const fs = require('fs');
@@ -373,100 +373,88 @@ describe('Reservations API - Handwriting Cleanup', () => {
   });
 });
 
-describe('Handwriting API', () => {
-  const testPngPath = path.join(__dirname, 'test.png');
-
-  beforeAll(() => {
-    // Create a dummy PNG file for testing
-    fs.writeFileSync(testPngPath, Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]));
+describe('Holidays API', () => {
+  beforeEach(async () => {
+    await db('holidays').del(); // Clear holidays before each test
   });
 
-  afterAll(() => {
-    // Clean up the dummy PNG file
-    if (fs.existsSync(testPngPath)) {
-      fs.unlinkSync(testPngPath);
-    }
+  it('should return 401 for unauthenticated access to /api/holidays', async () => {
+    const res = await request(app).get('/api/holidays');
+    expect(res.statusCode).toEqual(401);
   });
 
-  it('should upload a handwriting PNG and return its filename', async () => {
+  it('should return 403 for staff trying to access /api/holidays (POST)', async () => {
     const res = await request(app)
-      .post('/api/handwriting')
+      .post('/api/holidays')
       .auth(staffCredentials.name, staffCredentials.pass)
-      .attach('handwriting', testPngPath);
+      .send({ type: 'SPECIFIC_DATE', date: '2025-12-25', name: 'Christmas' });
+    expect(res.statusCode).toEqual(403);
+  });
+
+  it('should allow admin to create a specific date holiday', async () => {
+    const newHoliday = {
+      type: 'SPECIFIC_DATE',
+      date: '2025-12-25',
+      name: 'Christmas Day'
+    };
+    const res = await request(app)
+      .post('/api/holidays')
+      .auth(adminCredentials.name, adminCredentials.pass)
+      .send(newHoliday);
 
     expect(res.statusCode).toEqual(201);
-    expect(res.body).toHaveProperty('filename');
-    expect(res.body.filename).toMatch(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.png$/);
+    expect(res.body.name).toBe('Christmas Day');
+    expect(res.body.type).toBe('SPECIFIC_DATE');
+    expect(res.body.date).toBe('2025-12-25');
 
-    // Verify the file exists on disk
-    const uploadedFilePath = path.join(__dirname, '..', '..', 'data', 'png', res.body.filename);
-    expect(fs.existsSync(uploadedFilePath)).toBe(true);
-
-    // Clean up the uploaded file
-    fs.unlinkSync(uploadedFilePath);
+    const dbHoliday = await db('holidays').where({ name: 'Christmas Day' }).first();
+    expect(dbHoliday).toBeDefined();
   });
-});
 
-describe('Reservations API - Handwriting Cleanup', () => {
-  const testPngPath = path.join(__dirname, 'test_delete.png');
-  let reservationId;
-  let handwritingFilename;
-
-  beforeEach(async () => {
-    // Create a dummy PNG file for testing deletion
-    fs.writeFileSync(testPngPath, Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]));
-
-    // Upload the PNG and create a reservation with it
-    const uploadRes = await request(app)
-      .post('/api/handwriting')
-      .auth(staffCredentials.name, staffCredentials.pass)
-      .attach('handwriting', testPngPath);
-
-    handwritingFilename = uploadRes.body.filename;
-
-    const newReservation = {
-      date: '2025-07-17',
-      time_min: 700,
-      column_index: 3,
-      patient_name: null,
-      handwriting: handwritingFilename,
+  it('should allow admin to create a recurring day holiday', async () => {
+    const newHoliday = {
+      type: 'RECURRING_DAY',
+      day_of_week: 0, // Sunday
+      name: 'Weekend Sunday'
     };
-
     const res = await request(app)
-      .post('/api/reservations')
-      .auth(staffCredentials.name, staffCredentials.pass)
-      .send(newReservation);
+      .post('/api/holidays')
+      .auth(adminCredentials.name, adminCredentials.pass)
+      .send(newHoliday);
 
-    reservationId = res.body.id;
+    expect(res.statusCode).toEqual(201);
+    expect(res.body.name).toBe('Weekend Sunday');
+    expect(res.body.type).toBe('RECURRING_DAY');
+    expect(res.body.day_of_week).toBe(0);
+
+    const dbHoliday = await db('holidays').where({ name: 'Weekend Sunday' }).first();
+    expect(dbHoliday).toBeDefined();
   });
 
-  afterEach(() => {
-    // Clean up the dummy PNG file
-    if (fs.existsSync(testPngPath)) {
-      fs.unlinkSync(testPngPath);
-    }
-    // Ensure the uploaded file is cleaned up if test fails before deletion
-    const uploadedFilePath = path.join(__dirname, '..', '..', 'data', 'png', handwritingFilename);
-    if (fs.existsSync(uploadedFilePath)) {
-      fs.unlinkSync(uploadedFilePath);
-    }
-  });
-
-  it('should delete a reservation and its associated handwriting PNG', async () => {
-    const uploadedFilePath = path.join(__dirname, '..', '..', 'data', 'png', handwritingFilename);
-    expect(fs.existsSync(uploadedFilePath)).toBe(true); // Ensure file exists before deletion
+  it('should fetch all holidays', async () => {
+    await db('holidays').insert({ type: 'SPECIFIC_DATE', date: '2025-01-01', name: 'New Year' });
+    await db('holidays').insert({ type: 'RECURRING_DAY', day_of_week: 6, name: 'Saturday' });
 
     const res = await request(app)
-      .delete(`/api/reservations/${reservationId}`)
-      .auth(staffCredentials.name, staffCredentials.pass);
+      .get('/api/holidays')
+      .auth(staffCredentials.name, staffCredentials.pass); // Staff can read holidays
+
+    expect(res.statusCode).toEqual(200);
+    expect(res.body.length).toBe(2);
+    expect(res.body.some(h => h.name === 'New Year')).toBe(true);
+    expect(res.body.some(h => h.name === 'Saturday')).toBe(true);
+  });
+
+  it('should delete a holiday', async () => {
+    const id: number = (await db('holidays').insert({ type: 'SPECIFIC_DATE', date: '2025-03-20', name: 'Spring Equinox' }).returning('id'))[0];
+
+    const res = await request(app)
+      .delete(`/api/holidays/${id}`)
+      .auth(adminCredentials.name, adminCredentials.pass);
 
     expect(res.statusCode).toEqual(204);
 
-    // Verify the reservation is deleted from DB
-    const deletedReservation = await db('reservations').where({ id: reservationId }).first();
-    expect(deletedReservation).toBeUndefined();
-
-    // Verify the PNG file is deleted from disk
-    expect(fs.existsSync(uploadedFilePath)).toBe(false);
+    const dbHoliday = await db('holidays').where({ id }).first();
+    expect(dbHoliday).toBeUndefined();
   });
 });

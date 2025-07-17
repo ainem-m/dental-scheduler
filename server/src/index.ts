@@ -6,6 +6,7 @@ import { db } from './lib';
 import { authenticate } from './middleware/auth';
 import userRoutes from './routes/users';
 import reservationRoutes from './routes/reservations';
+import holidaysRoutes from './routes/holidays';
 import initializeSocket from './socket';
 import { errorHandler } from './lib/errors';
 import { 
@@ -78,6 +79,7 @@ app.use('/api', authenticate);
 // Mount routers with performance monitoring
 app.use('/api/users', withPerformanceMonitoring(userRoutes));
 app.use('/api', withPerformanceMonitoring(reservationRoutes));
+app.use('/api/holidays', withPerformanceMonitoring(holidaysRoutes));
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
