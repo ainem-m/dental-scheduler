@@ -15,6 +15,8 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
     const canvas = canvasRef.value;
 
     console.log('Drawing grid with context:', context);
+    console.log('Grid config:', config);
+    console.log('Grid state:', state);
     
     context.strokeStyle = config.lineColor;
     context.lineWidth = config.lineWidth;
@@ -43,6 +45,41 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
     context.strokeStyle = '#000';
     context.lineWidth = 2;
   }
+
+  // ヘッダーを描画する
+  const drawHeaders = () => {
+    if (!ctx.value) return;
+    const context = ctx.value;
+    context.font = '14px Arial';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillStyle = '#333';
+
+    // --- Draw Column Headers (e.g., "診察台 1") ---
+    for (let i = 0; i < config.columns; i++) {
+        const x = config.timeColumnWidth + (i + 0.5) * state.cellWidth;
+        const y = config.headerHeight / 2;
+        context.fillText(`診察台 ${i + 1}`, x, y);
+    }
+
+    // --- Draw Time Headers (e.g., "09:00") ---
+    context.textAlign = 'right';
+    for (let i = 0; i <= state.totalSlots; i++) {
+        if (i % (60 / config.timeSlotInterval) === 0) { // Draw hour labels
+            const y = config.headerHeight + i * state.cellHeight;
+            const hour = config.startHour + Math.floor(i * config.timeSlotInterval / 60);
+            
+            context.beginPath();
+            context.moveTo(0, y);
+            context.lineTo(state.canvasWidth, y);
+            context.strokeStyle = '#999'; // Bolder line for hour marks
+            context.lineWidth = 1.5;
+            context.stroke();
+
+            context.fillText(`${String(hour).padStart(2, '0')}:00`, config.timeColumnWidth - 10, y);
+        }
+    }
+  };
 
   // 予約を描画する
   const drawReservations = async () => {
@@ -128,6 +165,7 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
 
   return {
     drawGrid,
+    drawHeaders,
     drawReservations,
     getCoordinatesFromMouseEvent,
     getContext, // エクスポートする

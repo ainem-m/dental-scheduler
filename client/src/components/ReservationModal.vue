@@ -57,7 +57,13 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'save', 'delete']);
 
-const editableReservation = ref({});
+const editableReservation = ref({
+  patient_name: '',
+  handwriting: null,
+  date: null,
+  time_min: null,
+  column_index: null
+});
 const patientNameInput = ref(null);
 const handwritingCanvas = ref(null);
 const ctx = ref(null);
@@ -73,20 +79,39 @@ onMounted(() => {
 
 watch(() => props.show, (newVal) => {
   if (newVal) {
-    editableReservation.value = { ...props.reservation };
+    // Safely merge reservation data with defaults
+    editableReservation.value = {
+      patient_name: '',
+      handwriting: null,
+      date: null,
+      time_min: null,
+      column_index: null,
+      ...props.reservation
+    };
+    
     nextTick(() => {
-      patientNameInput.value?.focus();
-      setupCanvasContextAndDimensions(); // Ensure canvas is set up when modal opens
-      // If there's existing handwriting, load it onto the canvas
-      if (editableReservation.value.handwriting) {
-        const img = new Image();
-        img.onload = () => {
-          ctx.value.clearRect(0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
-          ctx.value.drawImage(img, 0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
-        };
-        img.src = `/api/handwriting/${editableReservation.value.handwriting}`;
-      } else {
-        clearCanvas(); // Clear canvas if no existing handwriting
+      try {
+        patientNameInput.value?.focus();
+        setupCanvasContextAndDimensions(); // Ensure canvas is set up when modal opens
+        
+        // If there's existing handwriting, load it onto the canvas
+        if (editableReservation.value.handwriting && ctx.value) {
+          const img = new Image();
+          img.onload = () => {
+            if (ctx.value && handwritingCanvas.value) {
+              ctx.value.clearRect(0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
+              ctx.value.drawImage(img, 0, 0, handwritingCanvas.value.width, handwritingCanvas.value.height);
+            }
+          };
+          img.onerror = () => {
+            console.error('Failed to load handwriting image');
+          };
+          img.src = `/api/handwriting/${editableReservation.value.handwriting}`;
+        } else {
+          clearCanvas(); // Clear canvas if no existing handwriting
+        }
+      } catch (error) {
+        console.error('Error during modal setup:', error);
       }
     });
   } else {

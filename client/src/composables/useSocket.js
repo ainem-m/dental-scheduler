@@ -46,6 +46,7 @@ export function useSocket() {
     isConnected,
     on,
     off,
+    socketEmit: emit, // Alias for consistency with ReservationGrid
     emit,
     joinDateRoom, // Expose the new function
   };

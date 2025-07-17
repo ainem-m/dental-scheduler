@@ -16,10 +16,15 @@
 </template>
 
 <script setup>
+console.log('ReservationGrid.vue script setup started');
+console.log('About to import composables...');
+
 import { ref, onMounted, reactive, onUnmounted, watch } from 'vue';
 import ReservationModal from './ReservationModal.vue';
 import { useGridDrawer } from '../composables/useGridDrawer';
 import { useSocket } from '../composables/useSocket';
+
+console.log('ReservationGrid.vue imports completed');
 
 const props = defineProps({
   date: {
@@ -70,7 +75,7 @@ const state = reactive({
 });
 
 // --- useGridDrawer から関数をインポート ---
-const { drawGrid, drawReservations, getCoordinatesFromMouseEvent } = useGridDrawer(canvas, reservations, config, state, ctx);
+const { drawGrid, drawHeaders, drawReservations, getCoordinatesFromMouseEvent } = useGridDrawer(canvas, reservations, config, state, ctx);
 const { on, off, socketEmit, joinDateRoom } = useSocket();
 
 // --- Data Fetching ---
@@ -91,7 +96,7 @@ const deleteReservation = (id) => {
 };
 
 // --- Socket.IO Event Handlers ---
-onMounted(() => {
+const setupSocketListeners = () => {
   on('reservations-updated', (updatedReservations) => {
     console.log('reservations-updated received:', updatedReservations);
     // Ensure we only show reservations for the currently viewed date
@@ -99,60 +104,43 @@ onMounted(() => {
     reservations.splice(0, reservations.length, ...filteredReservations);
     draw();
   });
-});
-
-onUnmounted(() => {
-  off('reservations-updated');
-});
+};
 
 
 // --- Drawing Functions ---
 
-const drawHeaders = () => {
-    if (!ctx.value) return;
-    const context = ctx.value;
-    context.font = '14px Arial';
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    context.fillStyle = '#333';
-
-    // --- Draw Column Headers (e.g., "診察台 1") ---
-    for (let i = 0; i < config.columns; i++) {
-        const x = config.timeColumnWidth + (i + 0.5) * state.cellWidth;
-        const y = config.headerHeight / 2;
-        context.fillText(`診察台 ${i + 1}`, x, y);
-    }
-
-    // --- Draw Time Headers (e.g., "09:00") ---
-    context.textAlign = 'right';
-    for (let i = 0; i <= state.totalSlots; i++) {
-        if (i % (60 / config.timeSlotInterval) === 0) { // Draw hour labels
-            const y = config.headerHeight + i * state.cellHeight;
-            const hour = config.startHour + Math.floor(i * config.timeSlotInterval / 60);
-            
-            context.beginPath();
-            context.moveTo(0, y);
-            context.lineTo(state.canvasWidth, y);
-            context.strokeStyle = '#999'; // Bolder line for hour marks
-            context.lineWidth = 1.5;
-            context.stroke();
-
-            context.fillText(`${String(hour).padStart(2, '0')}:00`, config.timeColumnWidth - 10, y);
-        }
-    }
-};
 
 const setupCanvas = () => {
   console.log('setupCanvas called');
+  if (!canvas.value || !ctx.value) {
+    console.error('Canvas or context not available', { canvas: canvas.value, ctx: ctx.value });
+    return;
+  }
+  
   const dpr = window.devicePixelRatio || 1;
   const parent = canvas.value.parentElement;
   const rect = parent.getBoundingClientRect();
+  
+  console.log('Canvas setup details:', { 
+    dpr, 
+    rectWidth: rect.width, 
+    rectHeight: rect.height,
+    parent: parent.tagName,
+    parentDisplay: getComputedStyle(parent).display
+  });
 
   state.canvasWidth = rect.width;
   // Canvasの高さは固定のセル高さとスロット数に基づいて計算
   state.totalSlots = ((config.endHour - config.startHour) * 60) / config.timeSlotInterval;
   state.cellHeight = config.cellHeightFixed; // 固定のセル高さを設定
   state.canvasHeight = config.headerHeight + state.totalSlots * state.cellHeight;
+
+  console.log('Canvas dimensions:', {
+    canvasWidth: state.canvasWidth,
+    canvasHeight: state.canvasHeight,
+    totalSlots: state.totalSlots,
+    cellHeight: state.cellHeight
+  });
 
   canvas.value.width = state.canvasWidth * dpr;
   canvas.value.height = state.canvasHeight * dpr;
@@ -165,16 +153,23 @@ const setupCanvas = () => {
   // Recalculate derived properties
   state.cellWidth = (state.canvasWidth - config.timeColumnWidth) / config.columns;
   
+  console.log('About to call draw()');
   draw();
 };
 
 const draw = () => {
+  console.log('draw() called');
   requestAnimationFrame(() => {
-    if (!ctx.value) return;
+    if (!ctx.value) {
+      console.error('ctx not available in draw()');
+      return;
+    }
+    console.log('Drawing canvas with dimensions:', state.canvasWidth, 'x', state.canvasHeight);
     ctx.value.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
     drawGrid();
     drawHeaders();
     drawReservations();
+    console.log('Draw completed');
   });
 };
 
@@ -244,13 +239,28 @@ watch(() => props.date, (newDate) => {
 
 
 onMounted(() => {
-  ctx.value = canvas.value.getContext('2d');
+  console.log('ReservationGrid onMounted called');
+  // Initialize canvas context
+  if (canvas.value) {
+    ctx.value = canvas.value.getContext('2d');
+    console.log('Canvas context initialized:', ctx.value);
+  } else {
+    console.error('Canvas element not found in onMounted');
+  }
+  
+  // Setup socket listeners
+  setupSocketListeners();
+  console.log('Socket listeners set up');
+  
+  // Setup canvas and drawing
   setupCanvas();
   window.addEventListener('resize', setupCanvas);
+  console.log('Canvas setup completed');
 });
 
 onUnmounted(() => {
   window.removeEventListener('resize', setupCanvas);
+  off('reservations-updated');
 });
 
 </script>

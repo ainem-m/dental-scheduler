@@ -11,6 +11,7 @@ vi.mock('../../src/composables/useSocket');
 
 describe('ReservationGrid.vue', () => {
   let mockDrawGrid;
+  let mockDrawHeaders;
   let mockDrawReservations;
   let mockGetCoordinatesFromMouseEvent;
   let mockSocketOn;
@@ -21,10 +22,12 @@ describe('ReservationGrid.vue', () => {
   beforeEach(() => {
     // Reset mocks for useGridDrawer
     mockDrawGrid = vi.fn();
+    mockDrawHeaders = vi.fn();
     mockDrawReservations = vi.fn();
     mockGetCoordinatesFromMouseEvent = vi.fn();
     useGridDrawer.mockReturnValue({
       drawGrid: mockDrawGrid,
+      drawHeaders: mockDrawHeaders,
       drawReservations: mockDrawReservations,
       getCoordinatesFromMouseEvent: mockGetCoordinatesFromMouseEvent,
     });
@@ -94,6 +97,7 @@ describe('ReservationGrid.vue', () => {
   it('initializes canvas and grid on mount', () => {
     mount(ReservationGrid, { props: { date: '2025-07-17' } });
     expect(mockDrawGrid).toHaveBeenCalled();
+    expect(mockDrawHeaders).toHaveBeenCalled();
     expect(mockDrawReservations).toHaveBeenCalled();
   });
 
