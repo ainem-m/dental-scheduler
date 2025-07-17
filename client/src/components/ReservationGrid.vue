@@ -16,15 +16,10 @@
 </template>
 
 <script setup>
-console.log('ReservationGrid.vue script setup started');
-console.log('About to import composables...');
-
 import { ref, onMounted, reactive, onUnmounted, watch } from 'vue';
 import ReservationModal from './ReservationModal.vue';
 import { useGridDrawer } from '../composables/useGridDrawer';
 import { useSocket } from '../composables/useSocket';
-
-console.log('ReservationGrid.vue imports completed');
 
 const props = defineProps({
   date: {
@@ -81,13 +76,12 @@ const { on, off, socketEmit, joinDateRoom } = useSocket();
 // --- Data Fetching ---
 const fetchDataForDate = (date) => {
   currentDate.value = date;
-  joinDateRoom(date); // Join the room for the new date
+  joinDateRoom(date);
   socketEmit('fetch-reservations', date);
 };
 
 // --- Socket.IO Functions ---
 const saveReservation = (reservation) => {
-  console.log('saveReservation called', reservation);
   socketEmit('save-reservation', reservation);
 };
 
@@ -98,8 +92,6 @@ const deleteReservation = (id) => {
 // --- Socket.IO Event Handlers ---
 const setupSocketListeners = () => {
   on('reservations-updated', (updatedReservations) => {
-    console.log('reservations-updated received:', updatedReservations);
-    // Ensure we only show reservations for the currently viewed date
     const filteredReservations = updatedReservations.filter(r => r.date === currentDate.value);
     reservations.splice(0, reservations.length, ...filteredReservations);
     draw();
@@ -111,36 +103,18 @@ const setupSocketListeners = () => {
 
 
 const setupCanvas = () => {
-  console.log('setupCanvas called');
   if (!canvas.value || !ctx.value) {
-    console.error('Canvas or context not available', { canvas: canvas.value, ctx: ctx.value });
     return;
   }
   
   const dpr = window.devicePixelRatio || 1;
   const parent = canvas.value.parentElement;
   const rect = parent.getBoundingClientRect();
-  
-  console.log('Canvas setup details:', { 
-    dpr, 
-    rectWidth: rect.width, 
-    rectHeight: rect.height,
-    parent: parent.tagName,
-    parentDisplay: getComputedStyle(parent).display
-  });
 
   state.canvasWidth = rect.width;
-  // Canvasの高さは固定のセル高さとスロット数に基づいて計算
   state.totalSlots = ((config.endHour - config.startHour) * 60) / config.timeSlotInterval;
-  state.cellHeight = config.cellHeightFixed; // 固定のセル高さを設定
+  state.cellHeight = config.cellHeightFixed;
   state.canvasHeight = config.headerHeight + state.totalSlots * state.cellHeight;
-
-  console.log('Canvas dimensions:', {
-    canvasWidth: state.canvasWidth,
-    canvasHeight: state.canvasHeight,
-    totalSlots: state.totalSlots,
-    cellHeight: state.cellHeight
-  });
 
   canvas.value.width = state.canvasWidth * dpr;
   canvas.value.height = state.canvasHeight * dpr;
@@ -150,26 +124,20 @@ const setupCanvas = () => {
   canvas.value.style.width = `${state.canvasWidth}px`;
   canvas.value.style.height = `${state.canvasHeight}px`;
 
-  // Recalculate derived properties
   state.cellWidth = (state.canvasWidth - config.timeColumnWidth) / config.columns;
   
-  console.log('About to call draw()');
   draw();
 };
 
 const draw = () => {
-  console.log('draw() called');
   requestAnimationFrame(() => {
     if (!ctx.value) {
-      console.error('ctx not available in draw()');
       return;
     }
-    console.log('Drawing canvas with dimensions:', state.canvasWidth, 'x', state.canvasHeight);
     ctx.value.clearRect(0, 0, state.canvasWidth, state.canvasHeight);
     drawGrid();
     drawHeaders();
     drawReservations();
-    console.log('Draw completed');
   });
 };
 
@@ -187,9 +155,6 @@ const onMouseDown = (event) => {
   if (props.isPlacingNewReservation) {
     // Selection mode: place the new reservation if the slot is empty
     if (existingReservation) {
-      // Slot is already occupied, do nothing or show a temporary message
-      console.log('この枠は既に埋まっています。');
-      // Optionally, add a visual feedback here (e.g., a brief toast message)
       return;
     } else {
       // Slot is empty, place the new reservation
@@ -239,26 +204,15 @@ watch(() => props.date, (newDate) => {
 
 
 onMounted(() => {
-  console.log('ReservationGrid onMounted called');
-  // Initialize canvas context
   if (canvas.value) {
     ctx.value = canvas.value.getContext('2d');
-    console.log('Canvas context initialized:', ctx.value);
-  } else {
-    console.error('Canvas element not found in onMounted');
   }
   
-  // Setup socket listeners
   setupSocketListeners();
-  console.log('Socket listeners set up');
-
-  // Fetch initial data
   fetchDataForDate(props.date);
   
-  // Setup canvas and drawing
   setupCanvas();
   window.addEventListener('resize', setupCanvas);
-  console.log('Canvas setup completed');
 });
 
 onUnmounted(() => {

@@ -105,14 +105,14 @@ watch(() => props.show, (newVal) => {
             }
           };
           img.onerror = () => {
-            console.error('Failed to load handwriting image');
+            // Failed to load handwriting image
           };
           img.src = `/api/handwriting/${editableReservation.value.handwriting}`;
         } else {
           clearCanvas(); // Clear canvas if no existing handwriting
         }
       } catch (error) {
-        console.error('Error during modal setup:', error);
+        // Error during modal setup
       }
     });
   } else {
@@ -128,7 +128,6 @@ const setupCanvasContextAndDimensions = () => {
   if (!ctx.value || ctx.value.canvas !== handwritingCanvas.value) {
     ctx.value = handwritingCanvas.value.getContext('2d');
     if (!ctx.value) {
-      console.error('Failed to get 2D context for canvas.');
       return;
     }
   }
@@ -144,14 +143,7 @@ const setupCanvasContextAndDimensions = () => {
   canvas.height = rect.height * dpr;
   ctx.value.scale(dpr, dpr);
 
-  // Log canvas dimensions and DPR for debugging
-  console.log('Canvas setup:', {
-    dpr,
-    rectWidth: rect.width,
-    rectHeight: rect.height,
-    canvasWidth: canvas.width,
-    canvasHeight: canvas.height,
-  });
+  // Canvas setup complete
 
   // Re-apply drawing styles after setting dimensions
   ctx.value.lineWidth = 2;
@@ -204,7 +196,7 @@ const clearCanvas = () => {
     ctx.value.lineCap = 'round';
     ctx.value.strokeStyle = 'black';
     ctx.value.fillStyle = 'white';
-    console.log('Canvas cleared and styles reapplied.');
+    // Canvas cleared and styles reapplied
   }
 };
 
@@ -224,9 +216,8 @@ const save = async () => {
       const data = await response.json();
       editableReservation.value.handwriting = data.filename; // Store the filename returned by the server
     } catch (error) {
-      console.error('Handwriting upload error:', error);
       alert('手書き画像のアップロードに失敗しました。');
-      return; // Prevent saving reservation if upload fails
+      return;
     }
   } else {
     // If canvas is blank and there was no existing handwriting, clear it

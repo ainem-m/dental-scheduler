@@ -1,12 +1,12 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import ReservationGrid from '../components/ReservationGrid.vue';
 
-const getToday = () => {
+const getToday = (): string => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: `/reservations/${getToday()}`,
@@ -15,7 +15,7 @@ const routes = [
     path: '/reservations/:date',
     name: 'ReservationDate',
     component: ReservationGrid,
-    props: true, // Allows :date to be passed as a prop to the component
+    props: true,
   },
 ];
 

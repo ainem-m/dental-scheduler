@@ -1,9 +1,19 @@
-const auth = require('basic-auth');
-const bcrypt = require('bcrypt');
-const { db } = require('../lib');
+import auth from 'basic-auth';
+import bcrypt from 'bcrypt';
+import { db } from '../lib';
+import { Request, Response, NextFunction } from 'express';
+
+// Extend Express Request type to include user
+declare global {
+  namespace Express {
+    interface Request {
+      user?: any; // You can define a proper User type here later
+    }
+  }
+}
 
 // Authentication Middleware
-const authenticate = async (req, res, next) => {
+export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
   const credentials = auth(req);
 
   if (!credentials) {
@@ -28,14 +38,9 @@ const authenticate = async (req, res, next) => {
 };
 
 // Authorization Middleware
-const authorize = (role) => (req, res, next) => {
+export const authorize = (role: string) => (req: Request, res: Response, next: NextFunction) => {
   if (!req.user || req.user.role !== role) {
     return res.status(403).json({ error: 'Forbidden: Insufficient permissions.' });
   }
   next();
-};
-
-module.exports = {
-  authenticate,
-  authorize,
 };

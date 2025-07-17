@@ -1,22 +1,65 @@
-import { ref, watch } from 'vue';
+import { ref, watch, type Ref } from 'vue';
 
-export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
-  function getContext() {
+export interface GridConfig {
+  columns: number;
+  startHour: number;
+  endHour: number;
+  timeSlotInterval: number;
+  headerHeight: number;
+  timeColumnWidth: number;
+  lineColor: string;
+  lineWidth: number;
+  cellHeightFixed: number;
+}
+
+export interface GridState {
+  canvasWidth: number;
+  canvasHeight: number;
+  cellWidth: number;
+  cellHeight: number;
+  totalSlots: number;
+}
+
+export interface Reservation {
+  id?: number;
+  date: string;
+  time_min: number;
+  column_index: number;
+  patient_name?: string;
+  handwriting?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Coordinates {
+  column_index: number;
+  time_min: number;
+}
+
+export interface GridDrawerComposable {
+  drawGrid: () => void;
+  drawHeaders: () => void;
+  drawReservations: () => Promise<void>;
+  getCoordinatesFromMouseEvent: (event: MouseEvent) => Coordinates | null;
+  getContext: () => CanvasRenderingContext2D | null;
+}
+
+export function useGridDrawer(
+  canvasRef: Ref<HTMLCanvasElement | null>,
+  reservations: Reservation[],
+  config: GridConfig,
+  state: GridState,
+  ctx: Ref<CanvasRenderingContext2D | null>
+): GridDrawerComposable {
+  function getContext(): CanvasRenderingContext2D | null {
     return ctx.value;
   }
 
-  function drawGrid() {
-    console.log('drawGrid called');
+  function drawGrid(): void {
     if (!ctx.value) {
-      console.log('ctx is null in drawGrid');
       return;
     }
     const context = ctx.value;
-    const canvas = canvasRef.value;
-
-    console.log('Drawing grid with context:', context);
-    console.log('Grid config:', config);
-    console.log('Grid state:', state);
     
     context.strokeStyle = config.lineColor;
     context.lineWidth = config.lineWidth;
@@ -41,13 +84,12 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
       context.stroke();
     }
     
-    // 描画スタイルを再度手書き用に設定
+    // Reset drawing style
     context.strokeStyle = '#000';
     context.lineWidth = 2;
   }
 
-  // ヘッダーを描画する
-  const drawHeaders = () => {
+  const drawHeaders = (): void => {
     if (!ctx.value) return;
     const context = ctx.value;
     context.font = '14px Arial';
@@ -55,14 +97,14 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
     context.textBaseline = 'middle';
     context.fillStyle = '#333';
 
-    // --- Draw Column Headers (e.g., "診察台 1") ---
+    // Draw Column Headers (e.g., "診察台 1")
     for (let i = 0; i < config.columns; i++) {
         const x = config.timeColumnWidth + (i + 0.5) * state.cellWidth;
         const y = config.headerHeight / 2;
         context.fillText(`診察台 ${i + 1}`, x, y);
     }
 
-    // --- Draw Time Headers (e.g., "09:00") ---
+    // Draw Time Headers (e.g., "09:00")
     context.textAlign = 'right';
     for (let i = 0; i <= state.totalSlots; i++) {
         if (i % (60 / config.timeSlotInterval) === 0) { // Draw hour labels
@@ -72,7 +114,7 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
             context.beginPath();
             context.moveTo(0, y);
             context.lineTo(state.canvasWidth, y);
-            context.strokeStyle = '#999'; // Bolder line for hour marks
+            context.strokeStyle = '#999';
             context.lineWidth = 1.5;
             context.stroke();
 
@@ -81,52 +123,55 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
     }
   };
 
-  // 予約を描画する
-  const drawReservations = async () => {
-    console.log('drawReservations called with:', reservations);
+  const drawReservations = async (): Promise<void> => {
     const context = ctx.value;
     if (!context) {
-      console.log('context is null in drawReservations');
       return;
     }
 
+    // Cache for loaded images to avoid repeated loading
+    const imageCache = new Map<string, HTMLImageElement>();
+
     const imagePromises = reservations.map(res => {
-      return new Promise(async (resolve) => {
+      return new Promise<void>(async (resolve) => {
         const x = config.timeColumnWidth + res.column_index * state.cellWidth;
         const y = config.headerHeight + ((res.time_min - config.startHour * 60) / config.timeSlotInterval) * state.cellHeight;
 
-        // 1. Draw background
+        // Draw background
         context.fillStyle = 'rgba(0, 123, 255, 0.8)';
         context.fillRect(x, y, state.cellWidth, state.cellHeight);
 
-        // 2. Draw handwriting if it exists (top half of the cell)
+        // Draw handwriting if it exists (top half of the cell)
         if (res.handwriting) {
           try {
-            const img = new Image();
-            await new Promise((imgResolve, imgReject) => {
-              img.onload = imgResolve;
-              img.onerror = () => {
-                console.error(`画像の読み込みに失敗: ${res.handwriting}`);
-                imgReject(); // Reject on error
-              };
-              img.src = `/api/handwriting/${res.handwriting}`;
-            });
-            context.drawImage(img, x, y, state.cellWidth, state.cellHeight / 2); // Draw in top half
+            let img = imageCache.get(res.handwriting);
+            if (!img) {
+              img = new Image();
+              await new Promise<void>((imgResolve, imgReject) => {
+                img!.onload = () => {
+                  imageCache.set(res.handwriting!, img!);
+                  imgResolve();
+                };
+                img!.onerror = () => imgReject();
+                img!.src = `/api/handwriting/${res.handwriting}`;
+              });
+            }
+            context.drawImage(img, x, y, state.cellWidth, state.cellHeight / 2);
           } catch (error) {
             // Continue even if image fails to load
           }
         }
 
-        // 3. Draw patient name on top (bottom half of the cell)
+        // Draw patient name on top (bottom half of the cell)
         if (res.patient_name) {
           context.textAlign = 'center';
           context.textBaseline = 'middle';
-          context.font = 'bold 10px Arial'; // Smaller font for patient name
-          context.strokeStyle = 'black'; // Black stroke for contrast
+          context.font = 'bold 10px Arial';
+          context.strokeStyle = 'black';
           context.lineWidth = 2;
-          context.strokeText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight * 3 / 4); // Draw in bottom half
-          context.fillStyle = 'white'; // White fill
-          context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight * 3 / 4); // Draw in bottom half
+          context.strokeText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight * 3 / 4);
+          context.fillStyle = 'white';
+          context.fillText(res.patient_name, x + state.cellWidth / 2, y + state.cellHeight * 3 / 4);
         }
         
         resolve();
@@ -134,9 +179,9 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
     });
 
     await Promise.all(imagePromises);
-  }
+  };
   
-  function getCoordinatesFromMouseEvent(event) {
+  function getCoordinatesFromMouseEvent(event: MouseEvent): Coordinates | null {
     const canvas = canvasRef.value;
     if (!canvas) return null;
 
@@ -168,6 +213,6 @@ export function useGridDrawer(canvasRef, reservations, config, state, ctx) {
     drawHeaders,
     drawReservations,
     getCoordinatesFromMouseEvent,
-    getContext, // エクスポートする
+    getContext,
   };
 }

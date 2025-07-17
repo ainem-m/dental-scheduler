@@ -1,15 +1,14 @@
-const express = require('express');
-const bcrypt = require('bcrypt');
-const { db } = require('../lib');
-const { authorize } = require('../middleware/auth');
+import express, { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
+import { db } from '../lib';
+import { authorize } from '../middleware/auth';
 
 const router = express.Router();
 
 // All routes in this file are automatically prefixed with /api/users
-// and are protected by the 'admin' authorization middleware.
 
 // POST /api/users - Create a new user
-router.post('/', authorize('admin'), async (req, res) => {
+router.post('/', authorize('admin'), async (req: Request, res: Response) => {
   const { username, password, role } = req.body;
 
   if (!username || !password || !role) {
@@ -38,7 +37,7 @@ router.post('/', authorize('admin'), async (req, res) => {
 });
 
 // GET /api/users - Get all users
-router.get('/', authorize('admin'), async (req, res) => {
+router.get('/', authorize('admin'), async (req: Request, res: Response) => {
   try {
     const users = await db('users').select('id', 'username', 'role');
     res.json(users);
@@ -49,7 +48,7 @@ router.get('/', authorize('admin'), async (req, res) => {
 });
 
 // PUT /api/users/:id - Update a user
-router.put('/:id', authorize('admin'), async (req, res) => {
+router.put('/:id', authorize('admin'), async (req: Request, res: Response) => {
   const { id } = req.params;
   const { username, password, role } = req.body;
 
@@ -58,19 +57,19 @@ router.put('/:id', authorize('admin'), async (req, res) => {
   }
 
   try {
-    const updateData = {};
+    const updateData: { [key: string]: any } = {};
     if (username) updateData.username = username;
     if (role) updateData.role = role;
     if (password) updateData.password_hash = await bcrypt.hash(password, 10);
     updateData.updated_at = db.fn.now();
 
-    const updatedRows = await db('users').where({ id }).update(updateData);
+    const updatedRows = await db('users').where({ id: Number(id) }).update(updateData);
 
     if (updatedRows === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    const updatedUser = await db('users').where({ id }).first();
+    const updatedUser = await db('users').where({ id: Number(id) }).first();
     const { password_hash: _, ...userWithoutHash } = updatedUser;
     res.json(userWithoutHash);
   } catch (err) {
@@ -80,11 +79,11 @@ router.put('/:id', authorize('admin'), async (req, res) => {
 });
 
 // DELETE /api/users/:id - Delete a user
-router.delete('/:id', authorize('admin'), async (req, res) => {
+router.delete('/:id', authorize('admin'), async (req: Request, res: Response) => {
   const { id } = req.params;
 
   try {
-    const deletedRows = await db('users').where({ id }).del();
+    const deletedRows = await db('users').where({ id: Number(id) }).del();
 
     if (deletedRows === 0) {
       return res.status(404).json({ error: 'User not found.' });
@@ -97,4 +96,4 @@ router.delete('/:id', authorize('admin'), async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
