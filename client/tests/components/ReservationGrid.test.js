@@ -33,12 +33,14 @@ describe('ReservationGrid.vue', () => {
     mockSocketOn = vi.fn();
     mockSocketOff = vi.fn();
     mockSocketEmit = vi.fn();
+    const mockJoinDateRoom = vi.fn();
     mockIsConnected = { value: true }; // Mock reactive ref
     useSocket.mockReturnValue({
       isConnected: mockIsConnected,
       on: mockSocketOn,
       off: mockSocketOff,
-      emit: mockSocketEmit,
+      socketEmit: mockSocketEmit, // Renamed emit to socketEmit
+      joinDateRoom: mockJoinDateRoom, // Add mockJoinDateRoom here
     });
 
     // Mock requestAnimationFrame
@@ -90,22 +92,23 @@ describe('ReservationGrid.vue', () => {
   });
 
   it('initializes canvas and grid on mount', () => {
-    mount(ReservationGrid);
+    mount(ReservationGrid, { props: { date: '2025-07-17' } });
     expect(mockDrawGrid).toHaveBeenCalled();
     expect(mockDrawReservations).toHaveBeenCalled();
   });
 
   it('removes socket listeners on unmount', () => {
-    const wrapper = mount(ReservationGrid);
+    const wrapper = mount(ReservationGrid, { props: { date: '2025-07-17' } });
     wrapper.unmount();
     // No direct socket listener assertions as they are handled within useSocket composable
   });
 
   it('handles canvas click and emits create-reservation event', async () => {
     const wrapper = mount(ReservationGrid, {
+      props: { date: '2025-07-17' },
       global: {
         stubs: {
-          ReservationModal: true // Stub the modal component
+          ReservationModal: true
         }
       }
     });
@@ -137,6 +140,7 @@ describe('ReservationGrid.vue', () => {
 
   it('does not emit event if modal is cancelled', async () => {
     const wrapper = mount(ReservationGrid, {
+      props: { date: '2025-07-17' },
       global: {
         stubs: {
           ReservationModal: true

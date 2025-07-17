@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import ReservationGrid from '../../components/ReservationGrid.vue';
+import ReservationGrid from '../components/ReservationGrid.vue';
 
 const getToday = () => {
   const d = new Date();

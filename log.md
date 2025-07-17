@@ -200,3 +200,39 @@
 - **最終結果:**
   - 上記の段階的なデバッグと修正を経て、すべてのE2Eテストが安定して成功するようになった。
   - Canvasベースのアプリケーションに対する、信頼性の高いテストスイートが完成した。
+
+## 11. Docker構成の本格運用対応 (2025-07-17)
+
+- **プロダクション向けDocker構成の実装:**
+  - `Dockerfile`を本格運用向けに最適化：
+    - プロダクションビルドプロセスの自動化（`npm run build`）
+    - better-sqlite3用のシステム依存関係の追加
+    - データベースマイグレーションの自動実行
+    - プロダクション依存関係のみのインストール（`npm ci --omit=dev`）
+  - `docker-compose.yml`をプロダクション環境用に修正：
+    - Docker volumeによるデータ永続化（SQLite & PNG files）
+    - ヘルスチェック機能の追加
+    - restart policy設定
+    - 開発用のvolume mountを削除
+  - 開発環境用の分離：
+    - `docker-compose.dev.yml`と`Dockerfile.dev`を新規作成
+    - 開発時のホットリロード対応
+    - 全依存関係のインストール（dev dependencies含む）
+
+- **package.json依存関係の整理:**
+  - ViteとVueプラグインをプロダクション依存関係に移動
+  - ビルド時の依存関係不足エラーを解決
+
+- **Knex設定の本格運用対応:**
+  - `knexfile.js`にproduction環境設定を追加
+  - プロダクション用SQLiteファイルパス設定
+
+- **動作確認:**
+  - `docker-compose build && docker-compose up`での正常起動を確認
+  - データ永続化とヘルスチェックの動作を確認
+  - CLAUDE.md仕様のDocker要件を満たすことを確認
+
+- **現在の状態:**
+  - ワンコマンドでの本格運用デプロイが可能
+  - 開発環境と本格運用環境の完全分離
+  - データ永続化とコンテナ復旧の自動化

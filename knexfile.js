@@ -29,5 +29,17 @@ module.exports = {
     }
   },
 
-  // Add other environments like production if needed
+  production: {
+    client: 'better-sqlite3',
+    connection: {
+      filename: './data/prod.sqlite3'
+    },
+    useNullAsDefault: true,
+    migrations: {
+      directory: './server/db/migrations'
+    },
+    seeds: {
+      directory: './server/db/seeds'
+    }
+  }
 };

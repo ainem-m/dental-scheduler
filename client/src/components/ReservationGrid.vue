@@ -1,5 +1,9 @@
 <template>
   <div class="grid-container">
+    <div v-if="isPlacingNewReservation" class="selection-mode-overlay">
+      <p>予約枠を選択してください</p>
+      <button @click="cancelNewReservationPlacement">キャンセル</button>
+    </div>
     <canvas ref="canvas" @mousedown="onMouseDown"></canvas>
   </div>
   <ReservationModal
@@ -22,7 +26,17 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  newReservationToPlace: {
+    type: Object,
+    default: null,
+  },
+  isPlacingNewReservation: {
+    type: Boolean,
+    default: false,
+  },
 });
+
+const emit = defineEmits(['newReservationPlaced', 'fetch-reservations', 'save-reservation']);
 
 const canvas = ref(null);
 const ctx = ref(null);
@@ -57,7 +71,7 @@ const state = reactive({
 
 // --- useGridDrawer から関数をインポート ---
 const { drawGrid, drawReservations, getCoordinatesFromMouseEvent } = useGridDrawer(canvas, reservations, config, state, ctx);
-const { on, off, emit, joinDateRoom } = useSocket();
+const { on, off, socketEmit, joinDateRoom } = useSocket();
 
 // --- Data Fetching ---
 const fetchDataForDate = (date) => {
@@ -68,11 +82,12 @@ const fetchDataForDate = (date) => {
 
 // --- Socket.IO Functions ---
 const saveReservation = (reservation) => {
-  emit('save-reservation', reservation);
+  console.log('saveReservation called', reservation);
+  socketEmit('save-reservation', reservation);
 };
 
 const deleteReservation = (id) => {
-  emit('delete-reservation', id);
+  socketEmit('delete-reservation', id);
 };
 
 // --- Socket.IO Event Handlers ---
@@ -174,18 +189,38 @@ const onMouseDown = (event) => {
     res.column_index === coordinates.column_index
   );
 
-  if (existingReservation) {
-    selectedReservation.value = { ...existingReservation };
+  if (props.isPlacingNewReservation) {
+    // Selection mode: place the new reservation if the slot is empty
+    if (existingReservation) {
+      // Slot is already occupied, do nothing or show a temporary message
+      console.log('この枠は既に埋まっています。');
+      // Optionally, add a visual feedback here (e.g., a brief toast message)
+      return;
+    } else {
+      // Slot is empty, place the new reservation
+      const reservationToSave = {
+        ...props.newReservationToPlace,
+        date: currentDate.value, // Ensure the date is current
+        time_min: coordinates.time_min,
+        column_index: coordinates.column_index,
+      };
+      saveReservation(reservationToSave);
+      emit('newReservationPlaced'); // Signal App.vue to exit selection mode
+    }
   } else {
-    selectedReservation.value = {
-      date: currentDate.value,
-      time_min: coordinates.time_min,
-      column_index: coordinates.column_index,
-      patient_name: ''
-    };
+    // Normal mode: open modal for existing or new reservation
+    if (existingReservation) {
+      selectedReservation.value = { ...existingReservation };
+    } else {
+      selectedReservation.value = {
+        date: currentDate.value,
+        time_min: coordinates.time_min,
+        column_index: coordinates.column_index,
+        patient_name: ''
+      };
+    }
+    isModalVisible.value = true;
   }
-
-  isModalVisible.value = true;
 };
 
 const handleSaveReservation = (savedReservation) => {
@@ -196,6 +231,10 @@ const handleSaveReservation = (savedReservation) => {
 const handleDeleteReservation = (id) => {
   deleteReservation(id);
   isModalVisible.value = false;
+};
+
+const cancelNewReservationPlacement = () => {
+  emit('newReservationPlaced'); // Signal App.vue to exit selection mode and clear data
 };
 
 // --- Lifecycle & Watchers ---
@@ -222,8 +261,41 @@ onUnmounted(() => {
   height: 80vh; /* Example height */
   border: 1px solid black;
   overflow-y: auto; /* 縦スクロールを有効にする */
+  position: relative; /* For positioning the overlay */
 }
 canvas {
   display: block;
+}
+
+.selection-mode-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.8); /* Semi-transparent white */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10; /* Above the canvas */
+  font-size: 1.5rem;
+  color: #333;
+  text-align: center;
+}
+
+.selection-mode-overlay button {
+  margin-top: 1rem;
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 5px;
+}
+
+.selection-mode-overlay button:hover {
+  background-color: #0056b3;
 }
 </style>

@@ -24,4 +24,7 @@ export default defineConfig({
     outDir: '../dist', // Adjust output output dir relative to the new root
     emptyOutDir: true,
   },
+  define: {
+    __VUE_PROD_DEVTOOLS__: JSON.stringify(false),
+  },
 });

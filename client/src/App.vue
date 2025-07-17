@@ -1,6 +1,7 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
+import ReservationModal from './components/ReservationModal.vue'; // Import the modal
 
 const router = useRouter();
 const route = useRoute();
@@ -18,6 +19,39 @@ const goToToday = () => {
   const today = new Date().toISOString().slice(0, 10);
   router.push({ name: 'ReservationDate', params: { date: today } });
 };
+
+// New state for handling new reservation creation
+const showNewReservationModal = ref(false);
+const newReservationData = ref(null); // Data filled in the modal, to be passed to grid for placement
+const isPlacingNewReservation = ref(false); // Flag to indicate grid is in selection mode
+
+const startNewReservation = () => {
+  newReservationData.value = {
+    date: currentDate.value, // Pre-fill current date
+    patient_name: '',
+    handwriting: null,
+    time_min: null, // These will be filled upon slot selection
+    column_index: null, // These will be filled upon slot selection
+  };
+  showNewReservationModal.value = true;
+};
+
+const handleNewReservationModalSave = (reservationDetails) => {
+  newReservationData.value = reservationDetails; // Save the details from the modal
+  showNewReservationModal.value = false; // Close the modal
+  isPlacingNewReservation.value = true; // Enter selection mode in the grid
+};
+
+const handleNewReservationModalClose = () => {
+  showNewReservationModal.value = false;
+  newReservationData.value = null; // Clear data if modal is closed without saving
+};
+
+// This function will be called by ReservationGrid when a slot is selected
+const onNewReservationPlaced = () => {
+  isPlacingNewReservation.value = false; // Exit selection mode
+  newReservationData.value = null; // Clear the data
+};
 </script>
 
 <template>
@@ -31,10 +65,26 @@ const goToToday = () => {
       </div>
       <button @click="changeDate(1)">翌日 ▶</button>
     </nav>
+    <div class="action-bar">
+      <button @click="startNewReservation">新規予約 (詳細入力)</button>
+    </div>
   </header>
   <main>
-    <router-view />
+    <router-view
+      :date="currentDate"
+      :newReservationToPlace="newReservationData"
+      :isPlacingNewReservation="isPlacingNewReservation"
+      @newReservationPlaced="onNewReservationPlaced"
+    />
   </main>
+
+  <!-- Modal for new reservation creation -->
+  <ReservationModal
+    :show="showNewReservationModal"
+    :reservation="newReservationData"
+    @close="handleNewReservationModalClose"
+    @save="handleNewReservationModalSave"
+  />
 </template>
 
 <style scoped>
@@ -67,5 +117,9 @@ button {
 }
 button:hover {
   background-color: #eee;
+}
+.action-bar {
+  text-align: center;
+  margin-top: 1rem;
 }
 </style>

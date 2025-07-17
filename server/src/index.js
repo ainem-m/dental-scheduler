@@ -267,229 +267,148 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`user disconnected: ${socket.id}`);
   });
-  // POST /api/reservations - Create a new reservation
-  app.post('/api/reservations', authenticate, async (req, res) => {
-    const { date, time_min, column_index, patient_name, handwriting } = req.body;
+}); // This closes the io.on('connection') block
 
-    // Basic validation
-    if (!date || time_min === undefined || column_index === undefined || (!patient_name && !handwriting)) {
-      return res.status(400).json({ error: 'Missing required reservation fields.' });
-    }
+// POST /api/reservations - Create a new reservation
+app.post('/api/reservations', authenticate, async (req, res) => {
+  const { date, time_min, column_index, patient_name, handwriting } = req.body;
 
-    console.log('Received POST /api/reservations request with body:', req.body);
-    try {
-      const [id] = await db('reservations').insert({
-        date,
-        time_min,
-        column_index,
-        patient_name,
-        handwriting,
-      });
-      const newReservation = await db('reservations').where({ id }).first();
-      io.emit('reservations-updated', await db('reservations').select('*')); // Notify clients
-      res.status(201).json(newReservation);
-    } catch (err) {
-      console.error('Error creating reservation:', err);
-      res.status(500).json({ error: 'Failed to create reservation.', details: err.message });
-    }
-  });
-
-  // GET /api/reservations - Fetch all reservations, optionally filtered by date
-  app.get('/api/reservations', authenticate, async (req, res) => {
-    try {
-      let query = db('reservations').select('*');
-      if (req.query.date) {
-        query = query.where({ date: req.query.date });
-      }
-      const reservations = await query;
-      res.json(reservations);
-    } catch (err) {
-      console.error('Error fetching reservations:', err);
-      res.status(500).json({ error: 'Failed to fetch reservations' });
-    }
-  });
-
-  // PUT /api/reservations/:id - Update an existing reservation
-  app.put('/api/reservations/:id', authenticate, async (req, res) => {
-    const { id } = req.params;
-    const { date, time_min, column_index, patient_name, handwriting } = req.body;
-
-    if (!date || time_min === undefined || column_index === undefined || (!patient_name && !handwriting)) {
-      return res.status(400).json({ error: 'Missing required reservation fields for update.' });
-    }
-
-    console.log('Received PUT /api/reservations/:id request with body:', req.body);
-    try {
-      const updatedRows = await db('reservations').where({ id }).update({
-        date,
-        time_min,
-        column_index,
-        patient_name,
-        handwriting,
-        updated_at: db.fn.now(), // Update timestamp
-      });
-
-      if (updatedRows === 0) {
-        return res.status(404).json({ error: 'Reservation not found.' });
-      };
-
-      const updatedReservation = await db('reservations').where({ id }).first();
-      io.emit('reservations-updated', await db('reservations').select('*')); // Notify clients
-      res.json(updatedReservation);
-    } catch (err) {
-      console.error('Error updating reservation:', err);
-      res.status(500).json({ error: 'Failed to update reservation.', details: err.message });
-    }
-  });
-
-  // DELETE /api/reservations/:id - Delete a reservation
-  app.delete('/api/reservations/:id', authenticate, async (req, res) => {
-    const { id } = req.params;
-
-    try {
-      // まず予約情報を取得
-      const reservationToDelete = await db('reservations').where({ id }).first();
-
-      if (!reservationToDelete) {
-        return res.status(404).json({ error: 'Reservation not found.' });
-      }
-
-      const deletedRows = await db('reservations').where({ id }).del();
-
-      // Delete associated handwriting PNG if it exists
-      if (reservationToDelete.handwriting) {
-        const filePath = path.join(__dirname, '..', '..', 'data', 'png', reservationToDelete.handwriting);
-        try {
-          await fs.promises.unlink(filePath); // await を追加
-        } catch (err) {
-          // ファイルが存在しない場合など、エラーを無視する
-          if (err.code !== 'ENOENT') {
-            console.error('Error deleting handwriting PNG:', err);
-          }
-        }
-      }
-
-      io.emit('reservations-updated', await db('reservations').select('*')); // Notify clients
-      res.status(204).send(); // No content for successful deletion
-    } catch (err) {
-      console.error('Error deleting reservation:', err);
-      res.status(500).json({ error: 'Failed to delete reservation.' });
-    }
-  });
-
-  function startServer(port, callback) {
-    return server.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-      if (callback) callback();
-    });
+  // Basic validation
+  if (!date || time_min === undefined || column_index === undefined || (!patient_name && !handwriting)) {
+    return res.status(400).json({ error: 'Missing required reservation fields.' });
   }
 
-  // Handle graceful shutdown
-  // Handle graceful shutdown (listeners are typically managed by process managers like concurrently)
-  // process.on('SIGTERM', () => {
-  //   console.log('SIGTERM received, closing server...');
-  //   server.close(() => {
-  //     console.log('Server closed.');
-  //     process.exit(0);
-  //   });
-  // });
+  console.log('Received POST /api/reservations request with body:', req.body);
+  try {
+    const [id] = await db('reservations').insert({
+      date,
+      time_min,
+      column_index,
+      patient_name,
+      handwriting,
+    });
+    const newReservation = await db('reservations').where({ id }).first();
+    io.emit('reservations-updated', await db('reservations').select('*')); // Notify clients
+    res.status(201).json(newReservation);
+  } catch (err) {
+    console.error('Error creating reservation:', err);
+    res.status(500).json({ error: 'Failed to create reservation.', details: err.message });
+  }
+});
 
-  // process.on('SIGINT', () => {
-  //   console.log('SIGINT received, closing server...');
-  //   server.close(() => {
-  //     console.log('Server closed.');
-  //     process.exit(0);
-  //   });
-  // });
+// GET /api/reservations - Fetch all reservations, optionally filtered by date
+app.get('/api/reservations', authenticate, async (req, res) => {
+  try {
+    let query = db('reservations').select('*');
+    if (req.query.date) {
+      query = query.where({ date: req.query.date });
+    }
+    const reservations = await query;
+    res.json(reservations);
+  } catch (err) {
+    console.error('Error fetching reservations:', err);
+    res.status(500).json({ error: 'Failed to fetch reservations' });
+  }
+});
 
-  // If this file is run directly (not imported as a module), start the server
-  if (require.main === module) {
-    startServer(PORT);
+// PUT /api/reservations/:id - Update an existing reservation
+app.put('/api/reservations/:id', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const { date, time_min, column_index, patient_name, handwriting } = req.body;
+
+  if (!date || time_min === undefined || column_index === undefined || (!patient_name && !handwriting)) {
+    return res.status(400).json({ error: 'Missing required reservation fields for update.' });
   }
 
-  module.exports = { app, server, io, startServer }; // Export startServer for testing
+  console.log('Received PUT /api/reservations/:id request with body:', req.body);
+  try {
+    const updatedRows = await db('reservations').where({ id }).update({
+      date,
+      time_min,
+      column_index,
+      patient_name,
+      handwriting,
+      updated_at: db.fn.now(), // Update timestamp
+    });
 
-  // Socket.IO connection handling
-  io.on('connection', (socket) => {
-    console.log('a user connected', socket.id);
+    if (updatedRows === 0) {
+      return res.status(404).json({ error: 'Reservation not found.' });
+    };
 
-    socket.on('fetch-reservations', async (date) => {
-      console.log(`Server received fetch-reservations for date: ${date}`);
+    const updatedReservation = await db('reservations').where({ id }).first();
+    io.emit('reservations-updated', await db('reservations').select('*')); // Notify clients
+    res.json(updatedReservation);
+  } catch (err) {
+    console.error('Error updating reservation:', err);
+    res.status(500).json({ error: 'Failed to update reservation.', details: err.message });
+  }
+});
+
+// DELETE /api/reservations/:id - Delete a reservation
+app.delete('/api/reservations/:id', authenticate, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // まず予約情報を取得
+    const reservationToDelete = await db('reservations').where({ id }).first();
+
+    if (!reservationToDelete) {
+      return res.status(404).json({ error: 'Reservation not found.' });
+    }
+
+    const deletedRows = await db('reservations').where({ id }).del();
+
+    // Delete associated handwriting PNG if it exists
+    if (reservationToDelete.handwriting) {
+      const filePath = path.join(__dirname, '..', '..', 'data', 'png', reservationToDelete.handwriting);
       try {
-        const reservations = await db('reservations').where({ date }).select('*');
-        console.log(`Server emitting reservations-updated with ${reservations.length} reservations for date: ${date}`);
-        socket.emit('reservations-updated', reservations);
+        await fs.promises.unlink(filePath); // await を追加
       } catch (err) {
-        console.error('Error fetching reservations via socket:', err);
-        socket.emit('error', 'Failed to fetch reservations.');
-      }
-    });
-
-    socket.on('save-reservation', async (reservation) => {
-      try {
-        let result;
-        if (reservation.id) {
-          // Update existing reservation
-          await db('reservations').where({ id: reservation.id }).update({
-            date: reservation.date,
-            time_min: reservation.time_min,
-            column_index: reservation.column_index,
-            patient_name: reservation.patient_name,
-            handwriting: reservation.handwriting,
-            updated_at: db.fn.now(),
-          });
-          result = await db('reservations').where({ id: reservation.id }).first();
-        } else {
-          // Insert new reservation
-          const [id] = await db('reservations').insert({
-            date: reservation.date,
-            time_min: reservation.time_min,
-            column_index: reservation.column_index,
-            patient_name: reservation.patient_name,
-            handwriting: reservation.handwriting,
-          });
-          result = await db('reservations').where({ id }).first();
+        // ファイルが存在しない場合など、エラーを無視する
+        if (err.code !== 'ENOENT') {
+          console.error('Error deleting handwriting PNG:', err);
         }
-        // Emit to all connected clients
-        io.emit('reservations-updated', await db('reservations').select('*'));
-      } catch (err) {
-        console.error('Error saving reservation via socket:', err);
-        socket.emit('error', 'Failed to save reservation.');
       }
-    });
+    }
 
-    socket.on('delete-reservation', async (id) => {
-      try {
-        // まず予約情報を取得
-        const reservationToDelete = await db('reservations').where({ id }).first();
+    io.emit('reservations-updated', await db('reservations').select('*')); // Notify clients
+    res.status(204).send(); // No content for successful deletion
+  } catch (err) {
+    console.error('Error deleting reservation:', err);
+    res.status(500).json({ error: 'Failed to delete reservation.' });
+  }
+});
 
-        if (!reservationToDelete) {
-          socket.emit('error', 'Reservation not found.');
-          return;
-        }
-
-        await db('reservations').where({ id }).del();
-
-        // Delete associated handwriting PNG if it exists
-        if (reservationToDelete.handwriting) {
-          const filePath = path.join(__dirname, '..', '..', 'data', 'png', reservationToDelete.handwriting);
-          try {
-            await fs.promises.unlink(filePath);
-          } catch (err) {
-            if (err.code !== 'ENOENT') {
-              console.error('Error deleting handwriting PNG:', err);
-            }
-          }
-        }
-        // Emit to all connected clients
-        io.emit('reservations-updated', await db('reservations').select('*'));
-      } catch (err) {
-        console.error('Error deleting reservation via socket:', err);
-        socket.emit('error', 'Failed to delete reservation.');
-      }
-    });
-
-    socket.on('disconnect', () => {
-      console.log('user disconnected', socket.id);
-    });
+function startServer(port, callback) {
+  return server.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+    if (callback) callback();
   });
+}
+
+// Handle graceful shutdown
+// Handle graceful shutdown (listeners are typically managed by process managers like concurrently)
+// process.on('SIGTERM', () => {
+//   console.log('SIGTERM received, closing server...');
+//   server.close(() => {
+//     console.log('Server closed.');
+//     process.exit(0);
+//   });
+// });
+
+// process.on('SIGINT', () => {
+//   console.log('SIGINT received, closing server...');
+//   server.close(() => {
+//     console.log('Server closed.');
+//     process.exit(0);
+//   });
+// });
+
+// If this file is run directly (not imported as a module), start the server
+if (require.main === module) {
+  startServer(PORT);
+}
+
+module.exports = { app, server, io, startServer }; // Export startServer for testing
+
+  

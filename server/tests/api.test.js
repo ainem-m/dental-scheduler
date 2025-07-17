@@ -1,5 +1,9 @@
 const request = require('supertest');
-const { app, server, io, startServer } = require('../src/index');
+const indexModule = require('../src/index');
+const app = indexModule.app;
+const server = indexModule.server;
+const io = indexModule.io;
+const startServer = indexModule.startServer;
 const db = require('../src/db');
 const bcrypt = require('bcrypt');
 const { io: Client } = require('socket.io-client');
